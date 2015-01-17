@@ -1,0 +1,14 @@
+#!/bin/sh
+
+. /etc/rc.subr
+
+name=hylisphv
+rcvar=hylisphv_enable
+
+command="/usr/sbin/${name}"
+command_args="-d -o /var/hylisphv/debug.log -e /var/hylisphv/error.log > /dev/null 2> /dev/null"
+
+pidfile="/var/run/${name}.pid"
+
+load_rc_config $name
+run_rc_command "$1"

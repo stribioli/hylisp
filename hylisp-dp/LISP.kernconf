@@ -1,0 +1,4 @@
+include		GENERIC
+ident		LISP
+
+options		LISP

@@ -1,0 +1,5 @@
+hyLISP is a project that bundles three clearly distinct modules. Every one is
+covered by a specific license, you can find it in the relative subdirectory.
+
+The common documentation is covered by the same 2-clause BSD license found in
+the "hylisp-hv" module.

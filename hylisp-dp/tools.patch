@@ -1,0 +1,6078 @@
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/sbin/Makefile freebsd-10.1.0-LISP/sbin/Makefile
+--- freebsd-10.1.0-RELEASE/sbin/Makefile	2014-12-05 22:16:52.675406126 +0100
++++ freebsd-10.1.0-LISP/sbin/Makefile	2014-12-14 13:47:08.801153056 +0100
+@@ -41,6 +41,7 @@
+ 	kldstat \
+ 	kldunload \
+ 	ldconfig \
++	map \
+ 	md5 \
+ 	mdconfig \
+ 	mdmfs \
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/sbin/map/keywords freebsd-10.1.0-LISP/sbin/map/keywords
+--- freebsd-10.1.0-RELEASE/sbin/map/keywords	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/sbin/map/keywords	2014-12-14 13:47:08.801153056 +0100
+@@ -0,0 +1,17 @@
++
++add
++delete
++get
++flush
++all
++database
++cache
++inet
++inet6 
++monitor
++negative
++nostatic
++static
++version
++locbits
++
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/sbin/map/Makefile freebsd-10.1.0-LISP/sbin/map/Makefile
+--- freebsd-10.1.0-RELEASE/sbin/map/Makefile	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/sbin/map/Makefile	2014-12-14 13:47:08.801153056 +0100
+@@ -0,0 +1,70 @@
++#- /usr/src/sbin/map/Makefile
++# 
++#
++# Copyright (c) 2010 - 2011 The OpenLISP Project
++#
++# Redistribution and use in source and binary forms, with or without
++#  modification, are permitted provided that the following conditions
++#  are met:
++#  1. Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++#  2. Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#  4. Neither the name of the University nor the names of its contributors
++#     may be used to endorse or promote products derived from this software
++#     without specific prior written permission.
++# 
++#  THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++#  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++#  ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++#  OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++#  HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++#  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++#  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++#  SUCH DAMAGE.
++#
++#
++#  Contributors: 
++#               Luigi Iannone <ggx@openlisp.org>
++#
++#
++# $Id: Makefile 182 2011-09-22 16:11:37Z ggx $
++#
++
++.include <bsd.own.mk>
++
++PROG=	map
++MAN=	map.8
++SRCS=	map.c keywords.h proto-numbers.h
++CFLAGS+=-I. -Wall -DNS -DLISP
++CFLAGS+=-DINET6
++WARNS?=	0
++CLEANFILES+=keywords.h _keywords.tmp proto-numbers.h _proto-numbers.tmp
++
++keywords.h: keywords
++	sed -e '/^#/d' -e '/^$$/d' ${.CURDIR}/keywords > _keywords.tmp
++	LC_ALL=C tr 'a-z' 'A-Z' < _keywords.tmp | paste _keywords.tmp - | \
++	    awk '{ \
++		if (NF > 1) \
++			printf "#define\tM_%s\t%d\n\t{\"%s\", M_%s},\n", \
++			    $$2, NR, $$1, $$2 }' \
++	    > ${.TARGET}
++	rm -f _keywords.tmp
++
++proto-numbers.h: proto-numbers
++	sed -e '/^#/d' -e '/^$$/d' ${.CURDIR}/proto-numbers > _proto-numbers.tmp
++	LC_ALL=C tr '-' '_' < _proto-numbers.tmp | paste _proto-numbers.tmp - | \
++	    awk '{ \
++		if (NF > 1) \
++			printf "#define\tP_%s\t%d\n\t{\"%s\"},\n", \
++			    $$2, NR, $$1 }' \
++	    > ${.TARGET}
++	rm -f _proto-numbers.tmp
++
++
++.include <bsd.prog.mk>
++
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/sbin/map/map.8 freebsd-10.1.0-LISP/sbin/map/map.8
+--- freebsd-10.1.0-RELEASE/sbin/map/map.8	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/sbin/map/map.8	2014-12-14 13:47:08.805155058 +0100
+@@ -0,0 +1,373 @@
++.\"/usr/src/sbin/map/map.8
++.\"
++.\" Copyright (c) 2009-2011 The OpenLISP Project
++.\"
++.\" Redistribution and use in source and binary forms, with or without
++.\" modification, are permitted provided that the following conditions
++.\" are met:
++.\" 1. Redistributions of source code must retain the above copyright
++.\"    notice, this list of conditions and the following disclaimer.
++.\" 2. Redistributions in binary form must reproduce the above copyright
++.\"    notice, this list of conditions and the following disclaimer in the
++.\"    documentation and/or other materials provided with the distribution.
++.\" 3. All advertising materials mentioning features or use of this software
++.\"    must display the following acknowledgement:
++.\"	This product includes software developed by the University of
++.\"	California, Berkeley and its contributors.
++.\" 4. Neither the name of the University nor the names of its contributors
++.\"    may be used to endorse or promote products derived from this software
++.\"    without specific prior written permission.
++.\"
++.\" THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++.\" SUCH DAMAGE.
++.\"
++.\" Contributors:
++.\"		Luigi Iannone <ggx@openlisp.org>
++.\"
++.\" $Id: map.8 182 2011-09-22 16:11:37Z ggx $
++.\"
++.\"
++.\" Copyright (c) 1983, 1990, 1992, 1993
++.\"     The Regents of the University of California.  All rights reserved.
++.\"
++.\" Redistribution and use in source and binary forms, with or without
++.\" modification, are permitted provided that the following conditions
++.\" are met:
++.\" 1. Redistributions of source code must retain the above copyright
++.\"    notice, this list of conditions and the following disclaimer.
++.\" 2. Redistributions in binary form must reproduce the above copyright
++.\"    notice, this list of conditions and the following disclaimer in the
++.\"    documentation and/or other materials provided with the distribution.
++.\" 3. All advertising materials mentioning features or use of this software
++.\"    must display the following acknowledgement:
++.\"     This product includes software developed by the University of
++.\"     California, Berkeley and its contributors.
++.\" 4. Neither the name of the University nor the names of its contributors
++.\"    may be used to endorse or promote products derived from this software
++.\"    without specific prior written permission.
++.\"
++.\" THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++.\" SUCH DAMAGE.
++.\"
++.\"
++.Dd September 27, 2011
++.Dt MAP 1
++.Os
++.Sh NAME
++.Nm map
++.Nd manually manipulate the LISP mappings
++.Sh SYNOPSIS
++.Nm
++.Op Fl dnqtv
++.Ar command
++.Oo
++.Op Ar modifiers
++.Ar args
++.Oc
++.Sh DESCRIPTION
++The
++.Nm
++utility is used to manually manipulate the network
++mapping tables (both cache and database).
++Only the super-user may modify the mapping tables.
++It normally is not needed, as a system mapping table management 
++daemon, such as LISP-ALT, should tend to this task.
++.Pp
++The
++.Nm
++utility supports a limited number of general options,
++but a rich command language, enabling the user to specify
++any arbitrary request that could be delivered via the
++programmatic interface discussed in
++.Xr map 4 .
++.Pp
++The following options are available:
++.Bl -tag -width indent
++.It Fl d
++Run in debug-only mode, i.e., do not actually modify the MapTables.
++.It Fl n
++Bypass attempts to print host and network names symbolically
++when reporting actions.
++(The process of translating between symbolic
++names and numerical equivalents can be quite time consuming, and
++may require correct operation of the network; thus it may be expedient
++to forget this, especially when attempting to repair networking operations).
++.It Fl v
++(verbose) Print additional details.
++.It Fl q
++Suppress all output from the
++.Cm add , change , 
++and
++.Cm delete
++commands.
++.El
++.Pp
++The
++.Nm
++utility provides five commands:
++.Pp
++.Bl -tag -width Fl -compact
++.It Cm add
++Add a mapping.
++.It Cm delete
++Delete a specific mapping.
++.It Cm get
++Lookup and display the mapping for an EID.
++.It Cm monitor
++Continuously report any changes to the mapping information base,
++mapping lookup misses, etc.
++.It Cm flush
++Remove all mappings. By default only mapping that are part of the LISP
++Cache are deleted unless specified differently through modifiers.
++.El
++.Pp
++The monitor command has the syntax:
++.Pp
++.Bd -ragged -offset indent -compact
++.Nm
++.Op Fl n
++.Cm monitor
++.Ed
++.Pp
++The flush command has the syntax:
++.Pp
++.Bd -ragged -offset indent -compact
++.Nm
++.Op Fl n
++.Cm flush
++.Op Fl cache \&| Fl database \&| Fl all
++.Ed
++.Pp
++Where
++.Fl cache 
++indicates to delete all mappings of the LISP Cache. This is the
++default behavior if no modifier is specified. 
++The 
++.Fl database
++modifier indicates to delete all mappings of the LISP Database. 
++The 
++.Fl all
++modifier indicates to delete all mappings from both the LISP Cache and
++the LISP Database.
++.Pp
++The other commands have the following syntax:
++.Pp
++.Bd -ragged -offset indent -compact
++.Nm
++.Op Fl n
++.Ar command
++.Op Fl cache \&| Fl database
++.Op Fl static \&| Fl nostatic
++.Op Fl version Ar VERSION
++.Op Fl locbits
++.Op Fl negative
++.Op Fl inet No \&| Fl inet6
++.Ar EID 
++.Op Fl inet No \&| Fl inet6 
++.Ar RLOC 
++.Op Priority Op Weight Op Rechability
++.Ed
++.Pp
++Where
++.Ar EID
++is the address of the EID-Prefix (it can be also a full address),
++while
++.Ar RLOC
++is a full address representing one of the RLOCs of the mapping. It is
++possible to define multiple RLOCs for the same EID.
++The keyword 
++.Fl inet
++and 
++.Fl inet6
++are not optional, they must be used before any address (both EID and
++RLOC). These keywords indicate if the following address should be
++treated as an IPv4 or IPv6 address/prefix.
++The 
++.Ar EID
++must be specified in the
++.Ar net Ns / Ns Ar bits
++format.
++For example,
++.Fl inet 
++.Li 128.32
++is interpreted as
++.Fl inet 
++.Li 128.0.0.32 ;
++.Fl inet
++.Li 128.32.130
++is interpreted as
++.Fl inet
++.Li 128.32.0.130 ;
++and
++.Fl inet
++.Li 192.168.64/20
++is interpreted as the network prefix 
++.Li 192.168.64.0 
++with netmask
++.Li 255.255.240.0 .
++.Pp
++The mofifiers 
++.Fl cache 
++and
++.Fl database
++indicate if the mapping should be treated as part of the LISP Cache or
++the LISP Database. If nothing is specified the default is LISP Cache.
++.Pp
++The modifiers 
++.Fl static
++and 
++.Fl nostatic
++indicate whether  the mapping has been manually added
++(default) or has been added by a daemon.
++.Pp
++The 
++.Fl version
++modifier allows to associate a version number to the mapping. If the
++modifier is present the argument right after it, i.e., 
++.Ar VERSION 
++is interpreted as the numeric value of the Map-Version. Only values
++between 0 and 4096 are valid and accepted. 
++.Pp
++The
++.Fl locbits
++modifier enables the Loc-Status-Bits in the LISP header when
++encapsulating packets with the mapping. See 
++.Va LISP
++for further details on this mechanism.
++.Pp
++The 
++.Fl negative 
++modifier allows to manipulate negative mappings. Negative mappings
++are special mappings indicating that no LISP encapsulation must be
++performed for destination in the prefix provided as EID-prefix.
++In the case of negative mappings no RLOCs have to be provided. 
++.Pp
++The values 
++.Ar Priority ,
++.Ar Weight ,
++and 
++.Ar Reachability ;
++are optional to declare. If not declared, the following default values
++are set:
++.Pp
++.Bl -tag -compact
++.It Priority 
++255 (Not usable)
++.It Weight
++100
++.It Reachability
++0 (not reachable)
++.El
++.Pp
++It is not mandatory to declare all of them, but when declaring one,
++all the previous must be also declared. This means that to declare a
++weight the priority must also be declared; and to set the reachability
++to 1 (reachable) both priority and weight must be declared.
++.Pp
++The
++.Nm
++utility uses a mapping socket and the message types
++.Dv MAPM_ADD , MAPM_DELETE , 
++and
++.Dv MAPM_GET .
++The 
++.Cm flush
++command is performed using the 
++.Xr sysctl 3 
++interface. 
++.Pp
++Only the super-user may modify the mapping tables but all users may
++query them.
++.Sh EXAMPLES
++.Pp 
++The command to add a mapping, in the LISP Database, 
++for 
++.Ar EID 
++.Li 1.1.0.0/16 , 
++having 
++.Ar RLOC 
++.Li 2.2.2.2 
++and 
++.Ar Priority 
++1, 
++.Ar Weight 
++100, and marked as Reachable, is: 
++.Pp
++map add -database -inet 1.1.0.0/16 -inet 2.2.2.2 1 100 1
++.Pp 
++The command to delete the same mapping is: 
++.Pp
++map delete -inet 1.1.0.0/16
++.Pp
++To add in the LISP Cache a mapping having several 
++RLOCs,  the command is:
++.Pp 
++map add -cache -inet 1.1.0.0/16 -inet 2.2.2.2 1 100 1 -inet 3.3.3.3 2 100 1
++-inet 4.4.4.4 3 100  -inet 5.5.5.5 
++.Pp
++The above command associate to the 
++.Ar EID-Prefix
++.Li 1.1.0.0/16
++the following RLOCs and related 
++.Ar Priority , 
++.Ar Weight ,  
++and 
++.Ar Reachability 
++values:
++.Bl -column ".Li 2.2.2.2" ".Dv Priority" ".Dv Weight" ".Dv Reachbility"
++.It Cm RLOC Ta Cm Priority Ta Cm Weight Ta Cm Reachability
++.It Li 2.2.2.2 Ta Dv 1 Ta Dv 100 Ta Dv Reachable
++.It Li 3.3.3.3 Ta Dv 2 Ta Dv 100 Ta Dv Reachable
++.It Li 4.4.4.4 Ta Dv 3 Ta Dv 100 Ta Dv Unreachable
++.It Li 5.5.5.5 Ta Dv 255 Ta Dv 100 Ta Dv Unreachable
++.El
++.Sh EXIT STATUS
++.Ex -std
++.Sh SEE ALSO
++.Xr lispintro 4 ,
++.Xr map 4 ,
++.Xr mapstat 1 .
++.Rs
++.%A "L. Iannone"
++.%A "O. Bonaventure"
++.%T "OpenLISP Implementation Report"
++.%O "draft-iannone-openlisp-implementation-01.txt"
++.Re
++.Rs
++.%A "D. Farinacci"
++.%A "V. Fuller"
++.%A "D. Oran"
++.%A "D. Meyer"
++.%T "Locator/ID Separation protocol (LISP)"
++.%O "draft-ietf-lisp-15.txt"
++.Re
++.Sh NOTE
++.Pp
++Please send any bug report or code contribution to the authors of
++OpenLISP.
++.Pp The MAPM_CHANGE message is not yet implemented.
++.Sh AUTHORS
++Luigi Iannone <ggx@openlisp.org>
++.Sh HISTORY
++The
++.Nm
++utility appeared in
++.Fx 7.0 . 
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/sbin/map/map.c freebsd-10.1.0-LISP/sbin/map/map.c
+--- freebsd-10.1.0-RELEASE/sbin/map/map.c	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/sbin/map/map.c	2014-12-14 13:47:08.805155058 +0100
+@@ -0,0 +1,2190 @@
++/*- /usr/src/sbin/map/map.c
++ *
++ * Copyright (c) 2010 - 2011 The OpenLISP Project
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 4. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ * 
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ *
++ *  Contributors: 
++ *               Luigi Iannone <ggx@openlisp.org>
++ *
++ * $Id: map.c 182 2011-09-22 16:11:37Z ggx $
++ *
++ */
++
++/* Copyright (c) 1983, 1989, 1991, 1993
++ *	The Regents of the University of California.  All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 4. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++#include <sys/param.h>
++#include <sys/file.h>
++#include <sys/socket.h>
++#include <sys/ioctl.h>
++#include <sys/sysctl.h>
++#include <sys/types.h>
++
++#include <net/if.h>
++#include <net/route.h>
++#include <net/if_dl.h>
++#include <netinet/in.h>
++#include <netinet/in_systm.h>
++#include <netinet/ip.h>
++#include <netinet/ip6.h>
++#include <netinet/if_ether.h>
++#include <netatalk/at.h>
++#include <arpa/inet.h>
++#include <netdb.h>
++
++#include <ctype.h>
++#include <err.h>
++#include <errno.h>
++#include <paths.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sysexits.h>
++#include <unistd.h>
++#include <ifaddrs.h>
++
++#include <net/lisp/lisp.h>
++#include <net/lisp/maptables.h>
++
++
++/* List of recognized protocols
++ */
++struct prototab {
++	char	*pt_cp;
++} protocols[] = {
++#include "proto-numbers.h"
++};
++
++
++/* List of recognized commands
++ */
++struct keytab {
++	char	*kt_cp;
++	int	kt_i;
++} keywords[] = {
++#include "keywords.h"
++	{0, 0}
++};
++
++/* List of recognized flags
++ */
++struct flagtable {
++	char	*ft_cp;
++	int	ft_f;
++} mapflags[] = {
++  { "Database",	    MAPF_DB},
++  { "Versioning",   MAPF_VERSIONING},
++  { "LocBits", 	    MAPF_LOCBITS},
++  { "Static",	    MAPF_STATIC},
++  { "Up",	    MAPF_UP},
++  { "All",	    MAPF_ALL},	
++  { "Expired",      MAPF_EXPIRED},
++  { "Negative",     MAPF_NEGATIVE},
++  { "Done",	    MAPF_DONE},	
++  { 0, 0}
++};
++
++/* Name of the addresses in the message
++ */
++struct flagtable addrnames[] = {
++  {"EID",     MAPA_EID},
++  {"EIDMASK", MAPA_EIDMASK},
++  {"RLOC",    MAPA_RLOC},
++  {0, 0}
++};
++
++union	sockunion {
++	struct	sockaddr sa;
++	struct	sockaddr_in sin;
++#ifdef INET6
++	struct	sockaddr_in6 sin6;
++#endif
++	struct	sockaddr_storage ss; 
++} so_eid, so_eidmask, so_rloc;
++
++typedef union sockunion *sup;
++
++struct static_rloc {
++        struct sockaddr_storage rloc_addr;
++        struct rloc_mtx metrics;
++};
++
++struct srloc {
++       struct static_rloc rloc;
++       struct srloc * next;
++};
++
++
++/* Static Empty RLOC chain */
++struct rloc_chain_struct {
++  int rloc_count;
++  struct srloc * head;
++  struct srloc * tail;
++} rloc_chain = {0, NULL, NULL};
++
++int	map_addrs;
++int	s; /* MAPPING SOCKET*/
++
++/* Options flags
++ */
++int	nameflag, quietflag, testonlyflag, verboseflag, debugonlyflag;
++int     cmdflag;
++
++int     pid;
++uid_t	uid;
++
++/* DB or Cache */
++int     fordb = 0, forcache = 0, forall = 0;
++
++/* RLOC flags and parameters */
++uint8_t rlocpriority = 255;
++uint8_t rlocweight = 100;
++uint16_t rlocflags = 0;
++uint32_t rlocmtu = 0;
++uint32_t rlocnonce = 0;
++
++/* Header flags */
++int L_bit = 0, V_bit = 0;
++uint16_t Vnumber = 0;
++
++#define MAX_VNUM 4096
++#define MAX_NONCE 16777215
++#define MAX_PRIORITY 255
++#define MAX_WEIGHT 100
++#define MAX_STATUS 1
++/* From Kernel */
++#define MAX_MTU 65535
++#define MIN_MTU 72
++
++int     afeid = 0, afleneid = sizeof(struct sockaddr_storage);
++int     afrloc = 0, aflenrloc = sizeof(struct sockaddr_storage);
++
++struct bits {
++	u_long	b_mask;
++	char	b_val;
++} rlocflagsbits[] = {
++	{ RLOCF_UP,	'U' },
++	{ RLOCF_LIF,	'i' },
++	{ RLOCF_TXNONCE,'n' },
++	{ 0 , 0 }
++};
++
++/* Message buffer */
++struct {
++	struct	map_msghdr m_map;
++	char	m_space[8192];
++} m_mapmsg;
++
++/*
++ * List Messages types
++ */
++char *msgtypes[] = {
++	"",
++	"[MAPM_ADD]\n  Map Add",
++	"[MAPM_DELETE]\n  Map Delete",
++	"[MAPM_CHANGE]\n  Change Metrics or flags",
++	"[MAPM_GET]\n  Report Metrics",
++	"[MAPM_MISS]\n  Lookup Failed  (general case)",
++	"[MAPM_MISS_EID]\n  Lookup Failed  and EID returned",
++	"[MAPM_MISS_HEADER]\n  Lookup Failed  and IP header returned",
++	"[MAPM_MISS_PACKET]\n  Lookup Failed  and Packet returned",
++	"[MAPM_LSBITS]\n  Loc Status Bits Changed",
++	"[MAPM_LOCALSTALE]\n   Local Map Version is stale",
++	"[MAPM_REMOTESTALE]\n  Remote Map Version is stale",
++	"[MAPM_NONCEMISMATCH]\n  Received a mismatching nonce",
++	0,
++};
++
++/* Subroutines
++ */
++void    monitor(), flushmappings(), handlemap();
++void    sodump(), rlocdump();
++void    flagprintf(), printmsg(), print_getmsg(), print_mapmsg();
++void    mask_addr(), append_rloc(), flush_rloc_chain();
++int     prefixlen(), send_mapmsg(), keyword(), getaddr();
++const char * mapaddr();
++static const char * format_rlocflags();
++
++void    inet_makenetandmask();
++static  int     inet6_makenetandmask();
++
++void usage_exit(const char *) __dead2;
++
++void
++usage_exit(cp)
++	const char *cp;
++{
++	if (cp)
++		warnx("bad keyword: %s", cp);
++	(void) fprintf(stderr,
++	    "usage: map [-dnqtvh] command [[modifiers] args]\n");
++	exit(EX_USAGE);
++	/* NOTREACHED 
++	 * This function never returns!
++	 */
++}
++
++/* Usefull Definition Max Arguments Number
++ */
++#define ARG_MONITOR 1
++#define ARG_FLUSH 3
++
++#define CHECK_ARGS_NUM(c,n)                        \
++  if (c > n) {					   \
++  warnx("Too many arguments");			   \
++  usage_exit((char *)NULL);			   \
++  /* NOTREACHED */				   \
++  };
++
++#define CHECK_ADDR(s)						   \
++  if (addrexp) {						   \
++    warnx("Keyword found where address expected: %s",s);	   \
++    usage_exit((char *)NULL);					   \
++    /* NOTREACHED */						   \
++  };
++
++int
++main(argc, argv)
++	int argc;
++	char **argv;
++{
++	int ch;
++
++	if (argc < 2)
++		usage_exit((char *)NULL);
++
++	/* Quickly go over the options
++	 */
++	while ((ch = getopt(argc, argv, "dnqtvh")) != -1) {
++
++		switch(ch) {
++		case 'n':
++			nameflag = 1;
++			break;
++		case 'q':
++			quietflag = 1;
++			break;
++		case 'v':
++			verboseflag = 1;
++			break;
++		case 't':
++			testonlyflag = 1;
++			break;
++		case 'd':
++			debugonlyflag = 1;
++			break;
++		case 'h':
++			usage_exit((char *)NULL);
++		default:
++			usage_exit((char *)NULL);
++		}
++
++	};
++
++	argc -= optind;
++	argv += optind;
++	pid = getpid();
++	uid = geteuid();
++
++	if (testonlyflag)
++	       /* Divert everything to /dev/null
++		*/
++		s = open(_PATH_DEVNULL, O_WRONLY, 0);
++	else
++		s = socket(PF_MAP, SOCK_RAW, 0);
++
++	if (s < 0)
++		err(EX_OSERR, "socket");
++
++		
++	if (*argv) {
++		switch (cmdflag = keyword(*argv)) {
++		case M_GET:
++			uid = 0;
++			/* FALL THROUGH */
++
++			/*case M_CHANGE: Not Yet available*/
++
++		case M_ADD:
++		case M_DELETE:
++			handlemap(argc, argv);
++			/* NOTREACHED */
++
++		case M_MONITOR:
++		        CHECK_ARGS_NUM(argc,ARG_MONITOR);
++			monitor();
++			/* NOTREACHED */
++
++		case M_FLUSH:
++			flushmappings(argc, argv);
++			exit(0);
++			/* NOTREACHED */
++		default:
++		        usage_exit(*argv);
++		};
++
++	};
++
++	usage_exit(*argv);
++	/* NOTREACHED */
++
++}  /* main() */
++
++
++/*
++ * Monitor mode (sniffing mapping sockets)
++ */
++void
++monitor()
++{
++ 
++	int n;
++	char msg[8192];
++	
++	/* Force verbose mode */
++	verboseflag = 1;
++
++	if (debugonlyflag || testonlyflag) {
++	        /* Nothing ot do */
++		exit(0);
++	};
++
++	for(;;) {
++		time_t now;
++		n = read(s, msg, 8192);
++		now = time(NULL);
++		(void) printf("\nGot message of size %d on %s \n", n, ctime(&now));
++		print_mapmsg((struct map_msghdr *)msg, n);
++	};
++
++} /* monitor() */
++
++
++/*
++ * Purge entries in the mapping tables
++ */
++void
++flushmappings(argc, argv)
++	int argc;
++	char *argv[];
++{
++        int mib[6], afflush = 0, count = 0, seqno = 0, mlen = 0;
++	int databaseflush = 0, cacheflush = 1, allflush = 0, modifierflag = 0;
++	size_t needed;
++	char *buffer, *limit, *next;
++    
++        struct map_msghdr *mapmsg;
++  
++        if (uid && !debugonlyflag) {
++                errx(EX_NOPERM, "Must be root to alter mapping table");
++        }
++
++	shutdown(s, SHUT_RD); /* Don't want to read back our messages */
++	
++	CHECK_ARGS_NUM(argc,ARG_FLUSH);
++
++	if (argc > 1) {
++
++	        if  (**(++argv)== '-' )  {
++
++		        switch (keyword(1+*argv)) {
++
++		        case M_ALL:
++			        allflush = 1 ;
++				cacheflush = 0;
++				modifierflag = 1;
++				break;
++
++		        case M_DATABASE:
++			        databaseflush = 1 ;
++				cacheflush = 0;
++				modifierflag = 1;
++				break;
++
++		        case M_CACHE:
++			        modifierflag = 1;
++				break;
++		        default:
++				usage_exit(1+*argv);
++
++			};
++			
++		} else {
++		        usage_exit(*argv);
++		};
++
++		if (modifierflag && argc > 2)
++		        argv++;
++	
++		if (!modifierflag || (modifierflag && argc > 2)) {
++		        if  (**(argv)== '-' )  {
++			        switch (keyword(1+*argv)) {
++
++			        case M_INET:
++				  afflush = AF_INET;
++				  break;
++
++#ifdef INET6
++			        case M_INET6:
++				  afflush = AF_INET6;
++				  break; 
++#endif
++		                default:
++				  usage_exit(1+*argv);
++				  /* NOT REACHED */
++				};
++				
++			} else {
++			        usage_exit(*argv);
++			};
++
++		};
++		  	
++	};
++retry:
++        mib[0] = CTL_NET;
++        mib[1] = PF_MAP;
++        mib[2] = 0;             /* protocol */
++        mib[3] = 0;             /* wildcard address family */
++        mib[4] = NET_MAPTBL_DUMP;
++        mib[5] = 0;             /* no flags */
++
++	if (sysctl(mib, 6, NULL, &needed, NULL, 0) < 0)
++                err(EX_OSERR, "map-sysctl-estimate");
++
++	if ((buffer = malloc(needed)) == NULL)
++                errx(EX_OSERR, "malloc failed");
++
++	if (sysctl(mib, 6, buffer, &needed, NULL, 0) < 0) {
++                if (errno == ENOMEM && count++ < 10) {
++                        warnx("Mapping table grew, retrying");  
++                        sleep(1);
++                        free(buffer);
++                        goto retry;
++                }
++                err(EX_OSERR, "map-sysctl-get");
++        }
++        limit = buffer + needed;
++	
++        if (verboseflag)
++                (void) printf("\nExamining mapping table from sysctl\n\n");
++		
++        for (next = buffer; next < limit; next += mapmsg->map_msglen) {
++
++	        mapmsg = (struct map_msghdr *)next;
++		
++		if (afflush) {
++                        struct sockaddr *sa = (struct sockaddr *)(mapmsg + 1);
++
++                        if (sa->sa_family != afflush)
++                                continue;
++		};
++
++		if (!allflush) {
++
++		  if (cacheflush && (mapmsg->map_flags & MAPF_DB)) {
++		           continue;
++		  };
++
++		  if (databaseflush && !(mapmsg->map_flags & MAPF_DB)) {
++		    continue;
++		  };
++                
++		};
++
++                if (verboseflag)
++                        print_mapmsg(mapmsg, mapmsg->map_msglen);
++ 
++		if (debugonlyflag)
++                        continue;
++
++		mapmsg->map_type = MAPM_DELETE;
++                mapmsg->map_seq = seqno;
++
++                mlen = write(s, next, mapmsg->map_msglen);
++ 
++		if (mlen < 0 && errno == EPERM)
++                        err(1, "write to mapping socket");
++
++                if (mlen < (int)mapmsg->map_msglen) {
++                        warn("write to mapping socket");
++                        (void) printf("got only %d for mlen\n", mlen);
++                        free(buffer);
++                        goto retry;
++                        break;
++		};
++
++                seqno++;
++
++                if (quietflag)
++                        continue;
++
++
++                if (verboseflag) {
++
++                        print_mapmsg(mapmsg, mlen);
++
++	        } else {
++                        struct sockaddr *sa = (struct sockaddr *)(mapmsg + 1);
++                        (void) printf("%-20.20s ", mapaddr(sa));
++                        sa = (struct sockaddr *)(SA_SIZE(sa) + (char *)sa);
++                        (void) printf("%-20.20s ", mapaddr(sa));
++                        (void) printf("done\n");
++		};
++
++	} /* for */
++
++} /* flushmappings() */
++
++/*
++ * Manage everything related to single mappings
++ */
++
++void
++handlemap(argc, argv)
++	int argc;
++	char **argv;
++{
++        const char *err;
++
++        char *eid = "", *rloc = "";
++        char *cmd;
++
++	int addrexp = 0, staticflag = 0, rlocstatus = 0, negativeflag = 0;
++
++        int ret, oerrno; 
++	int key, flags = MAPF_STATIC;
++
++	if (uid) {
++	        flush_rloc_chain();
++	        errx(EX_NOPERM, "Must be root to alter mapping table");
++	}
++
++	cmd = argv[0];
++	if (*cmd != 'g') 
++	       shutdown(s, SHUT_RD); /* If it is a GET
++				      * Don't want to read back our messages 
++				      */
++	while (--argc > 0) {
++ 	
++	        if  (**(++argv)== '-' )  {
++		       /* Modifier case
++			*/
++
++		        CHECK_ADDR((1 + *argv));
++
++		        switch (key = keyword(1 + *argv)) {
++
++			case M_CACHE:
++ 			        if ( forall || forcache || fordb ) {
++				         warnx("Conflicting or wrong modifier: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++ 			        if ( cmdflag == M_DELETE ) {
++				         warnx("Modifier not allowed: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++				
++				forcache++;
++				flags &= ~MAPF_DB;
++				break;
++
++			case M_DATABASE:
++ 			        if ( forall || forcache || fordb ) {
++				         warnx("Conflicting or wrong modifier: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++ 			        if ( cmdflag == M_DELETE ) {
++				         warnx("Modifier not allowed: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++				
++				fordb++;
++				flags |= MAPF_DB;
++				break;
++
++			case M_ALL:
++ 			        if ( forall || forcache || 
++				     fordb ||  cmdflag == M_DELETE ) {
++				         warnx("Conflicting or wrong modifier: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++				
++ 			        if ( cmdflag == M_ADD ||
++				     cmdflag == M_DELETE ) {
++				         warnx("Modifier not allowed: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++
++				forall++;
++				flags |= MAPF_ALL;
++				break;
++			
++
++			case M_NOSTATIC:
++ 			        if ( staticflag ) {
++				         warnx("Conflicting or wrong modifier: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++
++			        if ( cmdflag != M_ADD ) {
++				         warnx("Modifier not allowed: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++				
++				staticflag++;
++				flags &= ~MAPF_STATIC;
++				break;
++
++			
++			case M_STATIC:
++ 			        if ( staticflag ) {
++				         warnx("Conflicting or wrong modifier: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++
++			        if ( cmdflag != M_ADD ) {
++				         warnx("Modifier not allowed: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++
++				staticflag++;
++				flags |= MAPF_STATIC;
++				break;
++
++			case M_LOCBITS:
++			        if ( cmdflag != M_ADD ) {
++				         warnx("Modifier not allowed: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++
++				L_bit++;
++				flags |= MAPF_LOCBITS;
++				break;
++
++			case M_VERSION:
++			        if ( cmdflag != M_ADD ) {
++				         warnx("Modifier not allowed: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++
++				if  ( ((argc - 1) > 0) && ((**(argv+1))!= '-')){
++				       /* Read Version Number */
++
++				        Vnumber = strtonum(*(++argv), 0, MAX_VNUM, &err);
++					if (err) {
++					        warnx("Unable to convert \"%s\": %s ",*argv, err);
++						usage_exit((char*)NULL);
++
++					};
++	
++					argc--;
++
++				} else {
++
++				         warnx("Number expected after: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				}; 
++
++
++				V_bit++;
++				flags |= MAPF_VERSIONING;
++				break;
++
++		  	case M_INET:
++			        addrexp++;
++			        if (afeid == 0 ) {
++				        afeid = AF_INET;
++				        afleneid = sizeof(struct sockaddr_in);
++				}
++				else {
++				        afrloc = AF_INET;
++				        aflenrloc = sizeof(struct sockaddr_in);
++				};
++				break;
++
++#ifdef INET6
++			case M_INET6:
++			        addrexp++;
++			  	if (afeid == 0 ) {
++				        afeid = AF_INET6;
++				        afleneid = sizeof(struct sockaddr_in6);
++				}
++				else {
++				        afrloc = AF_INET6;
++				        aflenrloc = sizeof(struct sockaddr_in6);
++				}
++			        break;
++#endif
++
++			case M_NEGATIVE:
++ 			        if ( negativeflag ) {
++				         warnx("Conflicting or wrong modifier: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++
++				if ( cmdflag != M_ADD ) {
++				         warnx("Modifier not allowed: %s ",1+*argv);
++					 usage_exit((char*)NULL);
++				};
++				
++				negativeflag++;
++				flags |= MAPF_NEGATIVE;
++
++				break;
++
++
++			default:
++				usage_exit(1+*argv);
++			}
++		} else {
++
++		        if (!addrexp) {
++			        warnx("Wrong expression");
++				usage_exit((char*)NULL);
++			};
++
++			addrexp = 0;
++		  
++		  	if ((map_addrs & MAPA_EID) == 0) {
++			        
++			        eid = *argv;
++				(void) getaddr(MAPA_EID, *argv, 0);
++
++			} else {
++
++			        rloc = *argv;
++				if (getaddr(MAPA_RLOC, *argv, 0) == 0) {
++				       flush_rloc_chain();
++				       errx(EX_NOPERM, "RLOC must be an host address");
++				};
++			
++				/* Check for RLOC's priority, weight, status.
++				 * First number always considered as the 
++				 * priority, then the weight then the status.
++				 * nonce, and mtu.
++				 */
++				if  ( ((argc - 1) > 0) && ((**(argv+1))!= '-')){
++				  /* Priority */
++
++				  rlocpriority = (uint8_t)strtonum(*(++argv), 0, MAX_PRIORITY, &err);
++				  if (err) {
++				    flush_rloc_chain();
++				    warnx("Unable to convert \"%s\": %s ",*argv, err);
++				    usage_exit((char*)NULL);
++				    
++				  };
++				  
++				  argc--;
++				  
++				  if  ( ((argc - 1) > 0) && ((**(argv+1))!= '-')){
++				    /* Weight */
++				    
++				    rlocweight = (uint8_t)strtonum(*(++argv), 0, MAX_WEIGHT, &err);
++				    if (err) {
++				      flush_rloc_chain();
++				      warnx("Unable to convert \"%s\": %s ",*argv, err);
++				      usage_exit((char*)NULL);
++				      
++				    };
++				    
++				    argc--;
++				    
++				    if  ( ((argc - 1) > 0) && ((**(argv+1))!= '-')){
++				      /* Status */
++				      
++				      rlocstatus = strtonum(*(++argv), 0, MAX_STATUS, &err);
++				      if (err) {
++					flush_rloc_chain();
++					warnx("Unable to convert \"%s\": %s ",*argv, err);
++					usage_exit((char*)NULL);
++
++				      };
++							
++				      rlocflags |= rlocstatus;
++						
++				      argc--;
++
++				      if  ( ((argc - 1) > 0) && ((**(argv+1))!= '-')){
++					/* nonce */
++
++					if (strcmp(*(++argv),"0") ) {
++
++					  rlocnonce = strtonum(*(argv), 0, MAX_NONCE, &err);
++					  rlocflags |= RLOCF_TXNONCE;
++
++					  if (err) {
++					    flush_rloc_chain();
++					    warnx("Unable to convert \"%s\": %s ",*argv, err);
++					    usage_exit((char*)NULL);
++
++					  };
++
++					};
++		
++					argc--;
++
++				      };
++				      
++				      if  ( ((argc - 1) > 0) && ((**(argv+1))!= '-')){
++					/* MTU */
++
++					if (strcmp(*(++argv),"0") ) {
++
++					  rlocmtu = strtonum(*(argv), MIN_MTU, MAX_MTU, &err);
++					  if (err) {
++					    flush_rloc_chain();
++					    warnx("Unable to convert \"%s\": %s ",*argv, err);
++					    usage_exit((char*)NULL);
++
++					  };
++
++					};
++		
++					argc--;
++
++				      };
++
++				    };
++
++				  };
++
++				};
++				
++				/* GgX - Add rloc to the RLOC's chain */
++
++				append_rloc();
++
++			};
++		  
++		};
++	
++	}; /*while*/
++
++	if (cmdflag == M_DELETE)
++	        forall++;
++
++	if ( !(forall || forcache || fordb) ) {
++	       /* By default operation on cache is assumed */
++	        forcache++;
++	        flags &= ~MAPF_DB;
++	};
++
++	flags |= MAPF_UP;
++
++	errno = 0;
++	ret = send_mapmsg(cmdflag, flags);
++
++	if ((*cmd == 'g') && (ret == 0)) {
++	        exit(0);
++		/* NOT REACHED */
++	};
++
++	if (!quietflag) {
++		oerrno = errno;
++		(void) printf("%s %s %s", cmd, forall? "all" : (forcache ? "cache" : "database"), eid);
++
++		if (ret == 0) {
++			(void) printf(" Done!\n");
++		} else {
++			switch (oerrno) {
++			case ESRCH:
++				err = "not in table";
++				break;
++			case EBUSY:
++				err = "entry in use";
++				break;
++			case ENOBUFS:
++				err = "not enough memory";
++				break;
++
++			case EEXIST:
++				err = "map already in table";
++				break;
++			default:
++				err = strerror(oerrno);
++				break;
++			}
++			(void) printf(": %s\n", err);
++		}
++	}
++
++	exit(ret != 0);
++
++}  /* newmap() */
++
++/*
++ * Matches Keyword
++ */
++int
++keyword(cp)
++	char *cp;
++{
++	struct keytab *kt = keywords;
++
++	while (kt->kt_cp && strcmp(kt->kt_cp, cp))
++		kt++;
++
++	return kt->kt_i;
++}  /* keyword() */ 
++
++
++/*
++ * Interpret an argument as a network address of some kind,
++ * returning 1 if a host address, 0 if a network address.
++ */
++int
++getaddr(which, s, hpp)
++	int which;
++	char *s;
++	struct hostent **hpp;
++{
++  	sup su;
++	struct hostent *hp;
++	u_long network = 0;
++	int subnet = 0;
++	char *q;
++	int afamily, aflength;  /* local copy of af so we can change it */
++	const char * err = NULL;
++
++	map_addrs |= which;
++
++	switch (which) {
++
++	case MAPA_EID:
++	        if (afeid == 0) {
++		        /* Address family MUST be declared 
++			 * before each address 
++			 */
++		        flush_rloc_chain(); /* Not necessary but be safe */
++		        errx(EX_NOPERM, "Address Family must be declared before each address");
++		}
++	        afamily = afeid;
++		aflength = afleneid;
++	  	su = &so_eid;
++		break;
++
++	case MAPA_RLOC:
++	        if (afrloc == 0) {
++		        /* Address family MUST be declared 
++			 * before each address 
++			 */
++		        flush_rloc_chain();
++		        errx(EX_NOPERM, "Address Family must be declared before each address");
++		}
++        	afamily = afrloc;
++		aflength = aflenrloc;
++	        su =  &so_rloc;
++		break;
++	default:
++		usage_exit("Internal Error");
++		/*NOTREACHED*/
++	}
++
++	su->sa.sa_len = aflength;
++	su->sa.sa_family = afamily; 
++
++	switch (afamily) {
++
++	case AF_INET:
++
++	        if (hpp == NULL)
++		        hpp = &hp;
++
++	        *hpp = NULL;
++
++		/* Check first if prefix length specified 
++		 * In the case of an RLOC this is not allowed 
++		 * But error condition is checked in the caller 
++		 */
++	        q = strchr(s,'/');
++
++	        if (q) {
++		        *q = '\0';
++		        if ((network = inet_network(s)) != INADDR_NONE) {
++			  
++			        subnet = strtonum(q+1,0,32, &err);
++
++				if (err) {
++			                warnx("Unable to convert \"%s\": %s ", q+1, err);
++					usage_exit((char*)NULL);
++				};
++
++				inet_makenetandmask(network, &su->sin, subnet);
++
++			        return (0);
++		        } else {
++			        warnx("Address not valid: %s ", s);
++				usage_exit((char*)NULL);
++			};
++	
++			/* NOT REACHED */
++	        };
++
++		/* If no prefix length is specified it is assumed 
++		 * that we are dealing with host addresses
++		 */
++		if (which == MAPA_EID  && inet_aton(s, &su->sin.sin_addr)) {
++	                network = su->sin.sin_addr.s_addr;
++		        return (1);
++		        /*NOTREACHED*/ 
++		}
++		if (which == MAPA_RLOC  && inet_aton(s, &su->sin.sin_addr)) {
++	                network = su->sin.sin_addr.s_addr;
++		        return (1);
++		        /*NOTREACHED*/ 
++		}
++
++		/* Address has not been correctly interpreted */
++		flush_rloc_chain();
++		errx(EX_NOHOST, "bad address: %s", s);
++	        /*NOTREACHED*/ 
++
++#ifdef INET6
++	case AF_INET6:
++	       {
++		 struct addrinfo hints, *res;
++		 int ecode;
++
++		/* Check first if prefix length specified 
++		 * In the case of an RLOC this is not allowed 
++		 * But error condition is checked in the caller 
++		 */
++		 q = NULL;
++		 if ((q = strchr(s,'/')) != NULL) 
++		        *q = '\0';
++
++		memset(&hints, 0, sizeof(hints));
++		hints.ai_family = afamily;	/*AF_INET6*/
++		hints.ai_socktype = SOCK_DGRAM;	/*dummy*/
++
++		ecode = getaddrinfo(s, NULL, &hints, &res);
++		if (ecode != 0 || res->ai_family != AF_INET6 ||
++			             res->ai_addrlen != sizeof(su->sin6)) {
++		        flush_rloc_chain();
++			errx(EX_NOHOST,"%s: %s\n", s,gai_strerror(ecode));
++			        /*NOTREACHED*/ 
++		};
++
++       		memcpy(&su->sin6, res->ai_addr, sizeof(su->sin6));
++
++#ifdef __KAME__
++		if ((IN6_IS_ADDR_LINKLOCAL(&su->sin6.sin6_addr) ||
++		     IN6_IS_ADDR_MC_LINKLOCAL(&su->sin6.sin6_addr)) &&
++		    su->sin6.sin6_scope_id) {
++			*(uint16_t *)&su->sin6.sin6_addr.s6_addr[2] =
++				htons(su->sin6.sin6_scope_id);
++			su->sin6.sin6_scope_id = 0;
++		}
++#endif
++
++		freeaddrinfo(res);
++		
++		if (q != NULL) {
++			*q++ = '/';
++		
++			subnet = strtonum(q,0,128, &err);
++				
++			if (err) {
++			        warnx("Unable to convert \"%s\": %s ", q+1, err);
++				usage_exit((char*)NULL);
++			};
++
++		};
++
++		return (inet6_makenetandmask(&su->sin6, subnet, which));
++
++
++		}
++
++#endif /* INET6 */
++
++	default: 
++	        flush_rloc_chain();
++	        errx(EX_NOHOST, "bad address: %s", s);
++		/*NOTREACHED*/
++	}
++
++}  /* getaddr() */
++
++
++/*
++ * Flush the RLOC chain.
++ * Function is safe, works also for an empty chain.
++ */
++void 
++flush_rloc_chain(void)
++{
++       struct srloc * sr = rloc_chain.head;
++
++       while (rloc_chain.head){
++
++	 rloc_chain.head = rloc_chain.head->next;
++	 free(sr);
++
++       };
++
++}; /*flush_rloc_chain()*/
++
++
++/*
++ * Generates address and netmask
++ */
++void
++inet_makenetandmask(net, sin, bits)
++	u_long net;
++	struct sockaddr_in *sin;
++	u_long bits;
++{
++	sin->sin_addr.s_addr = htonl(net);
++
++	if (bits && (bits <32)) {
++
++  	       (void)prefixlen(bits);
++	  
++	};
++
++}  /*inet_makenetandmask() */
++
++
++#ifdef INET6
++/*
++ * XXX the function may need more improvement...
++ */
++static int
++inet6_makenetandmask(sin6, plen, which)
++	struct sockaddr_in6 *sin6;
++	int plen;
++	int which;
++{
++	struct in6_addr in6;
++
++	if (!plen) {
++	       /* This is an host address or 
++		*/
++		if (IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr) &&
++		    sin6->sin6_scope_id == 0) {
++
++			plen = 0;
++
++		} else if ((sin6->sin6_addr.s6_addr[0] & 0xe0) == 0x20) {
++			/* aggregatable global unicast - RFC2374 */
++
++			memset(&in6, 0, sizeof(in6));
++			if (!memcmp(&sin6->sin6_addr.s6_addr[8],
++				    &in6.s6_addr[8], 8))
++				plen = 64;
++		};
++	}
++
++	if (!plen || (plen == 128))
++		return 1;
++
++	(void)prefixlen(plen);
++
++	return 0;
++
++}  /* inet6_makenetandmask() */
++
++#endif
++
++/*
++ * Generates EIDMASK
++ */
++int
++prefixlen(len)
++        int len;
++{
++	int q, r;
++	int max, af, aflen;
++	char *p;
++
++	map_addrs |= MAPA_EIDMASK;
++	af = afeid;
++	aflen = afleneid;
++
++	switch (af) {
++
++#ifdef INET6
++	case AF_INET6:
++	        max = 128;
++	        p = (char *)&so_eidmask.sin6.sin6_addr;
++	        break;
++#endif
++
++	case AF_INET:
++	        max = 32;
++	        p = (char *)&so_eidmask.sin.sin_addr;
++	        break;
++
++	default:
++	        (void) fprintf(stderr, "prefixlen not supported in this af\n");
++		exit(1);
++		/*NOTREACHED*/
++	
++	};
++
++	if (len < 0 || max < len) {
++	       (void) fprintf(stderr, "%d: bad value\n", len);
++	       exit(1);
++	}
++	
++	q = len >> 3;
++	r = len & 7;
++
++	so_eidmask.sa.sa_family = af;
++	so_eidmask.sa.sa_len = aflen;
++
++	memset((void *)p, 0, max / 8);
++	if (q > 0)
++	       memset((void *)p, 0xff, q);
++	       
++	if (r > 0)
++	        *((u_char *)p + q) = (0xff00 >> r) & 0xff;
++	       
++	if (len == max)
++	         return -1;
++	else
++	         return len;
++	
++} /* prefixlen() */
++
++
++
++/* 
++ * Creates a new locator_chain entry and appends it to 
++ * rloc_chain.
++ * Order does not matter, the kernel will handle this correctly.
++ */
++void 
++append_rloc(void)
++{
++       struct srloc *newrloc = NULL;
++       newrloc = malloc(sizeof(struct srloc));
++       union sockunion * pso_rloc = &so_rloc;
++
++       if (newrloc == NULL) {
++	      flush_rloc_chain();
++              errx(EX_OSERR, "Malloc for new RLOC failed!");	
++       };
++
++       rloc_chain.rloc_count++;
++
++       bzero(newrloc, sizeof(struct srloc));
++       if (rloc_chain.head == NULL)
++	      /* The list is empty */
++	      rloc_chain.head = rloc_chain.tail = newrloc;
++       else
++	      rloc_chain.tail = rloc_chain.tail->next = newrloc;
++
++       bcopy(&so_rloc, &(rloc_chain.tail->rloc.rloc_addr), SA_SIZE(pso_rloc));
++       rloc_chain.tail->rloc.metrics.priority = rlocpriority;
++       rloc_chain.tail->rloc.metrics.weight = rlocweight;
++       rloc_chain.tail->rloc.metrics.flags = rlocflags;
++       rloc_chain.tail->rloc.metrics.mtu = rlocmtu;
++       if (rloc_chain.tail->rloc.metrics.flags & RLOCF_TXNONCE)
++	       rloc_chain.tail->rloc.metrics.tx_nonce.nvalue = rlocnonce;
++       
++
++       /* re-initialize */
++       bzero(&so_rloc, sizeof(union sockunion));
++       rlocpriority = 255;
++       rlocweight = 100;
++       rlocflags = 0;
++       rlocnonce = 0;
++       rlocmtu = 0;
++
++}; /* append_rloc() */
++
++/* 
++ * Prepare Msg to send through socket.
++ */
++
++int
++send_mapmsg(cmd, flags)
++     int cmd; 
++     int flags;
++{
++	static int seq;
++	int rlen;
++	char *cp = m_mapmsg.m_space;
++	int l;
++        struct srloc * sr = rloc_chain.head;
++
++	
++#define NEXTADDR(w, u, z)			                 \
++	if (map_addrs & (w)) {					 \
++	    l = SA_SIZE(&(u.sa)); memmove(cp, &(u), l); cp += l; \
++	    if (verboseflag) sodump(&(u), z);			 \
++	}
++ 
++
++#define NEXTRLOC(w, u)						       \
++	if (map_addrs & (w)) {					       \
++	    l = SS_SIZE(&(u.rloc_addr)); memmove(cp, &(u), l); cp += l;\
++	    memmove(cp, &(u.metrics), sizeof(struct rloc_mtx));	       \
++	    cp += sizeof(struct rloc_mtx);			       \
++	    if (verboseflag) rlocdump(u,"RLOC\t");		       \
++	}
++
++	errno = 0;
++
++#define map m_mapmsg.m_map
++
++	switch (cmd) {
++
++	case M_ADD:
++	        map.map_type = MAPM_ADD;
++		break;
++
++	case M_GET:
++	        map.map_type = MAPM_GET;
++		break;
++
++	case M_DELETE:
++	        map.map_type = MAPM_DELETE;
++		break;
++
++	default:
++   	        warnx("Command not recognized!");
++	        usage_exit((char *)NULL);
++	};
++
++	map.map_flags = flags;
++	map.map_version = MAPM_VERSION;
++	map.map_seq = ++seq;
++	map.map_addrs = map_addrs;
++	map.map_rloc_count = rloc_chain.rloc_count;
++	if (V_bit)
++	        map.map_versioning = Vnumber;
++
++	if (map_addrs & MAPA_EIDMASK)
++	       /* Chek if address really masked!
++		*/
++	        mask_addr();
++	      
++	NEXTADDR(MAPA_EID, so_eid, "EID    ");
++	NEXTADDR(MAPA_EIDMASK, so_eidmask, "EIDMASK");
++
++        /*Appending RLOCs */
++	while (sr){
++	        NEXTRLOC(MAPA_RLOC, sr->rloc);
++		sr = sr->next;
++	};
++
++	map.map_msglen = l = cp - (char *)&m_mapmsg;
++
++	if (verboseflag)
++	        print_mapmsg(&map, l);
++
++	if (debugonlyflag)
++		return (0);
++
++	if ((rlen = write(s, (char *)&m_mapmsg, l)) < 0) {
++		if (errno == EPERM)
++			err(1, "writing to mapping socket");
++		warn("writing to mapping socket");
++		return (-1);
++	};
++
++       	if (cmd == M_GET) {
++		do {
++			l = read(s, (char *)&m_mapmsg, sizeof(m_mapmsg));
++		} while (l > 0 && (map.map_seq != seq || map.map_pid != pid));
++
++		if (l < 0)
++			warn("read from mapping socket");
++		else
++		        print_getmsg(&map, l);
++	};
++	
++#undef map
++
++	return (0);
++
++}  /* send_mapmsg() */
++
++/*
++ * Dump socket information
++ */
++void
++sodump(su, which)
++	sup su;
++	char *which;
++{
++
++        char printableaddr[SOCK_MAXADDRLEN]; 
++
++	switch (su->ss.ss_family) {
++
++	case AF_INET:
++
++	        if (inet_ntop(su->ss.ss_family, 
++			      &(su->sin.sin_addr), 
++			      printableaddr, sizeof(printableaddr)) == NULL ) {
++ 
++	                flush_rloc_chain();
++			errx(EFAULT,"Internal Error");
++		};
++
++		(void) printf("%s: inet %s\n", which, printableaddr);
++		
++		break;
++
++	case AF_INET6:
++
++	        if (inet_ntop(su->ss.ss_family, 
++			      &(su->sin6.sin6_addr), 
++			      printableaddr, sizeof(printableaddr)) == NULL ) { 
++		
++		        flush_rloc_chain();
++			errx(EFAULT,"Internal Error");
++		};
++
++		(void) printf("%s: inet6 %s\n", which, printableaddr);
++		
++		break;
++
++	default:
++	  
++	        flush_rloc_chain();
++		errx(EFAULT,"Internal Error");
++
++	};
++
++	(void) fflush(stdout);
++
++}  /* sodump() */
++
++/*
++ *
++ */
++void
++mask_addr()
++
++{
++
++	int olen = so_eidmask.sa.sa_len;
++	char *cp1 = olen + (char *)&so_eidmask, *cp2;
++
++	for (so_eidmask.sa.sa_len = 0; cp1 > (char *)&so_eidmask; )
++		if (*--cp1 != 0) {
++			so_eidmask.sa.sa_len = 1 + cp1 - (char *)&so_eidmask;
++			break;
++		}
++
++	cp1 = so_eidmask.sa.sa_len + 1 + (char *)&so_eid;
++	cp2 = so_eid.sa.sa_len + 1 + (char *)&so_eid;
++	while (cp2 > cp1)
++		*--cp2 = 0;
++	cp2 = so_eidmask.sa.sa_len + 1 + (char *)&so_eidmask;
++	while (cp1 > so_eid.sa.sa_data)
++		*--cp1 &= *--cp2;
++
++}  /* mask_addr */
++
++
++
++void
++rlocdump(sr, which)
++	struct static_rloc sr;
++	char *which;
++{
++
++        char printableaddr[SOCK_MAXADDRLEN]; 
++
++
++	switch (sr.rloc_addr.ss_family) {
++
++	case AF_INET:
++
++	        if (inet_ntop(sr.rloc_addr.ss_family, 
++			      &((*(struct sockaddr_in *)&sr.rloc_addr).sin_addr), 
++			      printableaddr, sizeof(printableaddr)) == NULL ) {
++ 
++	                flush_rloc_chain();
++			errx(EFAULT,"Internal Error");
++		};
++
++	        (void) printf("%s: inet  ", which);
++		
++		break;
++
++	case AF_INET6:
++
++	        if (inet_ntop(sr.rloc_addr.ss_family, 
++			      &((*(struct sockaddr_in6 *)&sr.rloc_addr).sin6_addr), 
++			      printableaddr, sizeof(printableaddr)) == NULL ) { 
++		
++		        flush_rloc_chain();
++			errx(EFAULT,"Internal Error");
++		};
++
++	        (void) printf("%s: inet6 ", which);
++		
++		break;
++
++	default:
++	  
++	        flush_rloc_chain();
++		errx(EFAULT,"Internal Error");
++
++	};
++
++	(void) printf("%s \t P: %3d  W: %3d  Flags: %s ",
++		      printableaddr, sr.metrics.priority,
++		      sr.metrics.weight, format_rlocflags(sr.metrics.flags));
++	
++	if (sr.metrics.mtu) printf("MTU: %4d", sr.metrics.mtu);
++	
++	printf("\n");
++
++	if (sr.metrics.flags & RLOCF_TXNONCE) 
++	  printf("\t\t TxN: %8u", (uint32_t)sr.metrics.tx_nonce.nvalue);
++
++	if (sr.metrics.flags & RLOCF_RXNONCE) 
++	        printf(" RxN: %8u", (uint32_t)sr.metrics.rx_nonce.nvalue);
++
++	if (sr.metrics.flags & (RLOCF_TXNONCE | RLOCF_RXNONCE)) 
++	        printf("\n");
++
++	(void) fflush(stdout);
++	
++}  /* rlocdump() */
++
++
++/*
++ * Prepares string for RLOC's flags.
++ */
++static const char *
++format_rlocflags(int f)
++{
++	static char name[33];
++	char *flags;
++	struct bits *p = rlocflagsbits;
++
++	for (flags = name; p->b_mask; p++)
++		if (p->b_mask & f)
++			*flags++ = p->b_val;
++
++	*flags = '\0';
++
++	return (name);
++
++}  /*format_rlocflags() */
++
++
++
++/* 
++ * Print the map header message
++ */
++void
++print_mapmsg(mapm, msglen)
++        struct map_msghdr *mapm;
++	int msglen;
++{
++
++	if (verboseflag == 0)
++		return;
++
++	if (mapm->map_errno)  {
++		errno = mapm->map_errno;
++		warn("message indicates error %d", errno);
++		printf("\n");
++	};
++
++	if (msgtypes[mapm->map_type] != NULL)
++		(void)printf("%s: ", msgtypes[mapm->map_type]);
++	else
++		(void)printf("#%d: ", mapm->map_type);
++
++	(void)printf("len %d, ", mapm->map_msglen);
++	(void) printf("pid: %ld, seq %d, errno %d \n \t flags: ",
++			(long)mapm->map_pid, mapm->map_seq, mapm->map_errno);
++
++	flagprintf(stdout, mapm->map_flags, mapflags);
++
++	(void)printf("\n");
++
++	if (V_bit) 
++ 	        (void)printf("\t Map Version: %d\n", mapm->map_versioning);
++
++	printmsg(mapm);
++
++} /* print_mapmsg() */
++
++/*
++ * Print out map_msg flags
++ */
++void
++flagprintf(fp, bits, flagtbl)
++	FILE *fp;
++	int bits;
++	struct flagtable *flagtbl;
++{
++	int cp;
++	char* sp;
++	int gotsome = 0;
++
++	if (bits == 0)
++		return;
++
++	while ( flagtbl->ft_f ) {
++
++		if (bits & flagtbl->ft_f) {
++		        sp = flagtbl->ft_cp;
++			if (gotsome == 0)
++				cp = '<';
++			else
++				cp = ',';
++			(void) putc(cp, fp);
++			gotsome = 1;
++			for (; (cp = *sp); sp++)
++				(void) putc(cp, fp);
++		};
++
++		flagtbl++;
++
++	};
++
++	if (gotsome)
++		(void) putc('>', fp);
++
++} /* flagprintf */
++
++/* 
++ * Print content of IP header
++ */
++void
++print_iphdr(struct ip iphdr)
++{
++  /* Probably there should be some sanity check.
++   */
++
++  printf("IPv4 Header\n--------------------------------------->\n");
++  
++  printf("Version: \t\t %u\n", iphdr.ip_v);
++  printf("Protocol: \t\t %u %s\n", iphdr.ip_p, 
++	 protocols[iphdr.ip_p].pt_cp);
++  printf("Header length: \t\t %u\n",iphdr.ip_hl);
++  printf("Type of service: \t 0x%x\n",iphdr.ip_tos);
++  printf("Total length: \t\t %u\n",iphdr.ip_len);
++  printf("Identification: \t %u\n",iphdr.ip_id);
++  printf("Reserved Fragment bit: \t %u\n", (iphdr.ip_off & 0x8000));
++  printf("Don't Fragment bit: \t %u\n", (iphdr.ip_off & 0x4000));
++  printf("More Fragments bit: \t %u\n", (iphdr.ip_off & 0x2000));
++  printf("Offset length: \t\t %u\n", (iphdr.ip_off & 0x1FFF));
++  printf("Time to live: \t\t %u\n", iphdr.ip_ttl);
++  printf("Checksum: \t\t %u\n", iphdr.ip_sum);
++  printf("Source Address:\t\t %s\n", inet_ntoa(iphdr.ip_src));
++  printf("Destination Address:\t %s\n", inet_ntoa(iphdr.ip_dst));
++
++}  /* print_iphdr() */
++
++
++/* 
++ * Print content of IP header
++ */
++void
++print_ip6hdr(struct ip6_hdr ip6hdr)
++{
++  /* Probably there should be some sanity check.
++   */
++  char ip6addr[SOCK_MAXADDRLEN];
++
++  printf("IPv6 Header\n--------------------------------------->\n");
++  printf("Version: \t\t %u\n", (ip6hdr.ip6_vfc >> 4));
++  printf("Traffic Class: \t\t %u\n", (ntohs(ip6hdr.ip6_flow) & IPV6_FLOWLABEL_MASK) >> 20 );
++  printf("Flow-Id: \t\t %u\n", (ntohs(ip6hdr.ip6_flow) & IPV6_FLOWLABEL_MASK));
++  printf("Payload length: \t %u\n", ntohs(ip6hdr.ip6_plen));
++  printf("Next Protocol: \t\t %u %s\n", ip6hdr.ip6_nxt, 
++	 protocols[ip6hdr.ip6_nxt].pt_cp);
++  printf("Hop limit: \t\t %u\n", ip6hdr.ip6_hlim);
++  (void) inet_ntop(AF_INET6, &ip6hdr.ip6_src, ip6addr, SOCK_MAXADDRLEN);
++  printf("Source Address:\t\t %s\n", ip6addr);
++  (void) inet_ntop(AF_INET6, &ip6hdr.ip6_dst, ip6addr, SOCK_MAXADDRLEN);
++  printf("Destination Address:\t %s\n", ip6addr);
++ 
++}  /* print_ip6hdr() */
++
++void
++print_payload(char * payload, uint32_t len)
++{
++  int i = 0;
++  int byteperline = 8;
++  char hexbuffer[1024];
++  char asciibuffer[1024];
++  char * hcp = hexbuffer;
++  char * acp = asciibuffer;
++
++  bzero(hexbuffer, 1024);
++  bzero(asciibuffer, 1024);
++
++  printf("\nPrinting %u bytes payload:\n--------------------------------------->\n", len);
++
++
++  while ( i < len ) {
++
++      ( ((uint8_t)payload[i] > 0x0F) ? 
++      sprintf(hcp," %X", (uint8_t)payload[i]) :
++      sprintf(hcp," 0%X", (uint8_t)payload[i]));
++
++      ( (((uint8_t)payload[i] > 0x1F) && ((uint8_t)payload[i] < 0x7F) ) ? 
++	(*acp = payload[i]) :
++	(*acp = '.') );
++
++      acp++;
++      hcp += 3;
++
++      i++;
++
++      if ( (i%byteperline) == 0 ) {
++	printf("%s \t %s\n", hexbuffer, asciibuffer);
++	bzero(hexbuffer, 1024);
++	bzero(asciibuffer, 1024);
++	hcp = hexbuffer;
++	acp = asciibuffer;
++
++      };
++      
++
++  };
++
++  if (i%byteperline) {
++
++    while ( i%byteperline) {
++
++      sprintf(hcp,"   ");
++      hcp += 3;
++      i++;
++
++    };
++
++    printf("%s \t %s\n", hexbuffer, asciibuffer);
++
++  };
++
++
++}  /*print_payload() */
++
++
++/*
++ * Print the trailing the mapmsg header
++ */
++void
++printmsg(mapm)
++	struct map_msghdr *mapm;
++{
++        char *cp = (char *)(mapm + 1);
++	int addrs = mapm->map_addrs;
++	int numrlocs = mapm->map_rloc_count;
++
++	struct sockaddr *sa;
++	int i, flags;
++	uint32_t payloadlen = 0;
++	uint32_t mtu;
++	struct nonce_type rxnonce, txnonce;
++	struct ip iphdr;
++	struct ip6_hdr ip6hdr;
++
++	if (addrs == 0) {
++		(void) putchar('\n');
++		return;
++	}
++
++	(void) printf("\t Sockaddrs: ");
++
++	flagprintf(stdout, addrs, addrnames);
++
++	printf("\n");
++
++	if (mapm->map_flags & MAPF_VERSIONING) {
++	        printf("\t Version: %u\n", mapm->map_versioning);
++	};
++
++	for (i = 1; i; i <<= 1)
++
++	  switch (i & addrs) {
++
++	  case MAPA_EID:
++	  case MAPA_EIDMASK:
++	          sa = (struct sockaddr *)cp;
++		  (void) printf("\t %s\n", mapaddr(sa));
++		  cp += SA_SIZE(sa);
++		  break;
++
++	  case MAPA_RLOC:
++	    
++	          (void) printf("\t RLOCS: %d\n",mapm->map_rloc_count);
++
++	          while (numrlocs--) {
++		          sa = (struct sockaddr *)cp;
++			  (void) printf("\t %s", mapaddr(sa));
++			  cp += SA_SIZE(sa);
++			  (void) printf(" %d", (uint8_t) *cp++);
++			  (void) printf(" %d", (uint8_t) *cp++);
++			  bcopy(cp, &flags, sizeof(uint16_t));    
++			  cp += sizeof(uint16_t); /* flags are uint16_t */
++			  if (flags & RLOCF_UP) { 
++			          (void)printf(" Up");
++			  } else { 
++			          (void)printf(" Down");
++			  };
++			  if (flags & RLOCF_LIF)  
++			          (void)printf(" LocalIf");
++			  bcopy(cp, &mtu, sizeof(uint32_t));
++			  cp += sizeof(uint32_t); /* mtu is uint32_t */
++			  (void)printf(" MTU %d", mtu);
++			  bcopy(cp, &txnonce, sizeof(struct nonce_type));
++			  cp += sizeof(struct nonce_type); 
++			  if (flags & RLOCF_TXNONCE) { 
++			          (void)printf(" TX Nonce %u", txnonce.nvalue);
++			  };
++			  bcopy(cp, &rxnonce, sizeof(struct nonce_type));    
++			  cp += sizeof(struct nonce_type);
++			  if (flags & RLOCF_RXNONCE) { 
++			          (void)printf(" RX Nonce %u", rxnonce.nvalue);
++			  };
++
++			  (void) putchar('\n');
++
++		  };
++	  
++		  break;
++
++	  };
++	
++	(void) putchar('\n');
++
++	if ( mapm->map_type == MAPM_MISS_HEADER )  {
++	 
++	        switch ( ((struct ip *)cp)->ip_v ) {
++
++		case IPVERSION:
++		  
++		        bcopy(cp, &iphdr,  sizeof(struct ip));
++			cp += sizeof(struct ip);
++
++			print_iphdr(iphdr);
++
++			break;
++
++		case (IPV6_VERSION >> 4):
++
++		        bcopy(cp, &ip6hdr,  sizeof(struct ip6_hdr));
++			cp += sizeof(struct ip6_hdr);
++		
++			print_ip6hdr(ip6hdr);
++		
++			break;
++
++		};
++	   
++	};
++
++	if ( mapm->map_type == MAPM_MISS_PACKET ) {
++	  /* Need to print packet content 
++	   */
++	        switch ( ((struct ip *)cp)->ip_v ) {
++
++		case IPVERSION:
++		  
++		        bcopy(cp, &iphdr,  sizeof(struct ip));
++			cp += sizeof(struct ip);
++			payloadlen = iphdr.ip_len - (iphdr.ip_hl << 2);
++
++			print_iphdr(iphdr);
++
++			break;
++
++		case (IPV6_VERSION >> 4):
++
++		        bcopy(cp, &ip6hdr,  sizeof(struct ip6_hdr));
++			cp += sizeof(struct ip6_hdr);
++			payloadlen = ntohs(ip6hdr.ip6_plen);
++		
++			print_ip6hdr(ip6hdr);
++		
++			break;
++
++		};
++	  
++		print_payload(cp, payloadlen);
++
++	};
++
++	
++
++	(void) fflush(stdout);
++
++}  /* printmsg() */
++
++/*
++ * Print Address
++ */
++const char *
++mapaddr(sa)
++	struct sockaddr *sa;
++{
++	static char line[MAXHOSTNAMELEN + 1];
++	static char domain[MAXHOSTNAMELEN + 1];
++	static int first = 1, n;
++  	char *cp;
++	struct hostent *hp;
++
++	if (first) {
++		first = 0;
++		if ((gethostname(domain, MAXHOSTNAMELEN) == 0)
++		    && (cp = strchr(domain, '.'))) {
++			domain[MAXHOSTNAMELEN] = '\0';
++			(void) strcpy(domain, cp + 1);
++		} else {
++			domain[0] = 0;
++		};
++	};
++
++	if (sa->sa_len == 0)
++		strcpy(line, "default");
++
++	else {
++	        switch (sa->sa_family) {
++
++	        case AF_INET: {
++
++		        struct in_addr in = ((struct sockaddr_in *)sa)->sin_addr;
++
++			cp = 0;
++			if (in.s_addr == INADDR_ANY || sa->sa_len < 4)
++			         cp = "default";
++	
++			if (cp == 0 && !nameflag) {
++			        hp = gethostbyaddr((char *)&in, 
++						   sizeof (struct in_addr),
++						   AF_INET);
++				if (hp) {
++				        if ((cp = strchr(hp->h_name, '.')) &&
++					    !strcmp(cp + 1, domain))
++					        *cp = 0;
++
++					cp = hp->h_name;
++				};
++			};
++	
++			if (cp) {
++			        strncpy(line, cp, sizeof(line) - 1);
++				line[sizeof(line) - 1] = '\0';
++			} else
++			        (void) sprintf(line, "%s", inet_ntoa(in));
++
++			break;
++		};
++		  
++#ifdef INET6
++	        case AF_INET6: {
++
++		        struct sockaddr_in6 sin6; 
++			int niflags = 0;
++
++			memset(&sin6, 0, sizeof(sin6));
++			memcpy(&sin6, sa, sa->sa_len);
++			sin6.sin6_len = sizeof(struct sockaddr_in6);
++			sin6.sin6_family = AF_INET6;
++
++#ifdef __KAME__
++			if (sa->sa_len == sizeof(struct sockaddr_in6) &&
++			    (IN6_IS_ADDR_LINKLOCAL(&sin6.sin6_addr) ||
++			     IN6_IS_ADDR_MC_LINKLOCAL(&sin6.sin6_addr)) &&
++			    sin6.sin6_scope_id == 0) {
++			        sin6.sin6_scope_id =
++				  ntohs(*(uint16_t *)&sin6.sin6_addr.s6_addr[2]);
++				sin6.sin6_addr.s6_addr[2] = 0;
++				sin6.sin6_addr.s6_addr[3] = 0;
++			};
++#endif
++			if (nameflag)
++			        niflags |= NI_NUMERICHOST;
++
++			if (getnameinfo((struct sockaddr *)&sin6, sin6.sin6_len,
++					line, sizeof(line), NULL, 0, 
++					niflags) != 0)
++			        strncpy(line, "invalid", sizeof(line));
++
++		        break;
++		};
++#endif
++
++	        default: {
++		        uint8_t *s = (uint8_t *)sa;
++			uint8_t *slim = s + ((sa->sa_len + 1) >> 1);
++			char *cp = line + sprintf(line, "(%d)", sa->sa_family);
++			char *cpe = line + sizeof(line);
++
++			while (++s < slim && cp < cpe) { 
++			       /* start with sa->sa_data */
++			        if ((n = snprintf(cp, cpe - cp, " %x", *s)) > 0)
++				        cp += n;
++				else
++				        *cp = '\0';
++			}; 
++
++			break;
++		  
++		};
++		
++		};
++
++	};
++
++	return (line);
++
++}  /* mapaddr() */
++
++
++/*
++ * Print GET messages
++ */
++void
++print_getmsg(mapmsg, mapmsglen)
++	struct map_msghdr *mapmsg;
++	int mapmsglen;
++{
++        struct sockaddr_storage *eid = NULL, *eidmask = NULL; 
++	char * rloc = NULL;
++	struct sockaddr_storage *ss;
++	char *cp;
++	int i, rlocnumber = 0;
++	struct static_rloc sr;
++  
++        printf("Mapping for EID: %s\n", mapaddr(&so_eid));
++
++	if (mapmsg->map_version != MAPM_VERSION) {
++		warnx("mapping message version %d not understood",
++		     mapmsg->map_version);
++		return;
++	};
++
++	if (mapmsg->map_msglen > mapmsglen) {
++		warnx("message length mismatch, in packet %d, returned %d",
++		      mapmsg->map_msglen, mapmsglen);
++	};
++
++	if (mapmsg->map_errno)  {
++		errno = mapmsg->map_errno;
++		warn("message indicates error %d", errno);
++		return;
++	};
++
++	cp = ((char *)(mapmsg + 1));
++
++	if (mapmsg->map_addrs) {
++	        for (i = 1; i; i <<= 1) {
++			if (i & mapmsg->map_addrs) {
++				ss = (struct sockaddr_storage *)cp;
++				switch (i) {
++				case MAPA_EID:
++					eid = ss;
++					break;
++				case MAPA_EIDMASK:
++					eidmask = ss;
++					break;
++				case MAPA_RLOC:
++				        rloc = (char *)ss;
++					rlocnumber = mapmsg->map_rloc_count;
++
++					break;
++
++				};
++				cp += SS_SIZE(ss);
++			};
++		};
++	};
++
++	if (eid && eidmask)
++		eidmask->ss_family = eid->ss_family;	/* XXX */
++
++	if (eid)
++		printf("EID    : %s\n", mapaddr(eid));
++
++	if (eidmask) {
++		int savenflag = nameflag;
++		nameflag = 1;
++		printf("EIDMASK: %s\n", mapaddr(eidmask));
++		nameflag = savenflag;
++	};
++
++
++	if (rloc) {
++	        cp = rloc;  /* GgX - Re-initialize cp */	
++	        /* GgX - double check rloc and rlocnumber */
++	        while (rlocnumber--) {
++		        bcopy(cp, &sr.rloc_addr, SS_SIZE(cp));
++			cp += SS_SIZE(&sr.rloc_addr);
++			bcopy(cp, &sr.metrics, sizeof(struct rloc_mtx));    
++			cp += sizeof(struct rloc_mtx); 
++			rlocdump(sr,"RLOC   ");
++		};
++	};
++
++	if (mapmsg->map_flags & MAPF_VERSIONING) {
++	        printf("Version: %u\n", mapmsg->map_versioning);
++	};
++  
++	printf("Flags  : ");
++
++	flagprintf(stdout, mapmsg->map_flags, mapflags);
++
++	printf("\n");
++	
++	if (verboseflag)
++		printmsg(mapmsg);
++	
++	
++} /* print_getmsg() */
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/sbin/map/proto-numbers freebsd-10.1.0-LISP/sbin/map/proto-numbers
+--- freebsd-10.1.0-RELEASE/sbin/map/proto-numbers	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/sbin/map/proto-numbers	2014-12-14 13:47:08.805155058 +0100
+@@ -0,0 +1,144 @@
++HOPOPT
++ICMP 
++IGMP
++GGP
++IPv4
++ST
++TCP
++CBT
++EGP
++IGP  
++BBN-RCC-MON
++NVP-II
++PUP
++ARGUS
++EMCON
++XNET
++CHAOS
++UDP
++MUX
++DCN-MEAS
++HMP
++PRM
++XNS-IDP
++TRUNK-1
++TRUNK-2
++LEAF-1
++LEAF-2
++RDP
++IRTP
++ISO-TP4
++NETBLT
++MFE-NSP
++MERIT-INP
++DCCP
++3PC
++IDPR
++XTP
++DDP
++IDPR-CMTP
++TPpp
++IL
++IPv6
++SDRP
++IPv6-Route
++IPv6-Frag
++IDRP
++RSVP
++GRE
++DSR
++BNA
++ESP
++AH
++I-NLSP
++SWIPE
++NARP
++MOBILE
++TLSP
++SKIP
++IPv6-ICMP
++IPv6-NoNxt
++IPv6-Opts
++any-host-internal-protocol
++CFTP
++any-local-network
++SAT-EXPAK
++KRYPTOLAN
++RVD
++IPPC
++any-distributed-file-system
++SAT-MON
++VISA
++IPCV
++CPNX
++CPHB
++WSN
++PVP
++BR-SAT-MON
++SUN-ND
++WB-MON
++WB-EXPAK
++ISO-IP
++VMTP
++SECURE-VMTP
++VINES
++TTP
++NSFNET-IGP
++DGP
++TCF
++EIGRP
++OSPFIGP
++Sprite-RPC
++LARP
++MTP
++AX-25
++IPIP
++MICP
++SCC-SP
++ETHERIP
++ENCAP
++any-private-encryption-scheme
++GMTP
++IFMP
++PNNI
++PIM
++ARIS
++SCPS
++QNX
++AN
++IPComp
++SNP
++Compaq-Peer
++IPX-in-IP
++VRRP
++PGM
++any-0-hop-protocol
++L2TP
++DDX
++IATP
++STP
++SRP
++UTI
++SMP
++SM
++PTP
++ISIS-over-IPv4
++FIRE
++CRTP
++CRUDP
++SSCOPMCE
++IPLT
++SPS
++PIPE
++SCTP
++FC
++RSVP-E2E-IGNORE
++Mobility-Header
++UDPLite
++MPLS-in-IP
++manet
++HIP
++Shim6
++WESP
++ROHC
++MAXPROTO
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/share/man/man4/lispintro.4 freebsd-10.1.0-LISP/share/man/man4/lispintro.4
+--- freebsd-10.1.0-RELEASE/share/man/man4/lispintro.4	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/share/man/man4/lispintro.4	2014-12-14 13:47:08.805155058 +0100
+@@ -0,0 +1,471 @@
++.\"/usr/src/share/man/man4/lispintro.4
++.\"
++.\" Copyright (c) 2009-2011 The OpenLISP Project
++.\"
++.\" Redistribution and use in source and binary forms, with or without
++.\" modification, are permitted provided that the following conditions
++.\" are met:
++.\" 1. Redistributions of source code must retain the above copyright
++.\"    notice, this list of conditions and the following disclaimer.
++.\" 2. Redistributions in binary form must reproduce the above copyright
++.\"    notice, this list of conditions and the following disclaimer in the
++.\"    documentation and/or other materials provided with the distribution.
++.\" 3. All advertising materials mentioning features or use of this software
++.\"    must display the following acknowledgement:
++.\"	This product includes software developed by the University of
++.\"	California, Berkeley and its contributors.
++.\" 4. Neither the name of the University nor the names of its contributors
++.\"    may be used to endorse or promote products derived from this software
++.\"    without specific prior written permission.
++.\"
++.\" THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++.\" SUCH DAMAGE.
++.\"
++.\" Contributors:
++.\"		Luigi Iannone <ggx@openlisp.org>
++.\"
++.\" $Id: lispintro.4 181 2011-09-22 15:54:43Z ggx $
++.\"
++.\"
++.Dd September 27, 2011
++.Dt LISPINTRO 4
++.Os
++.Sh NAME
++.Nm Introduction to OpenLISP
++.Nd  Kernel implementation of the Locator/ID Separation protocol
++.Sh SYNOPSIS
++.In sys/types.h
++.In sys/time.h
++.In sys/socket.h
++.In net/if.h
++.In net/maptable.h
++.Sh DESCRIPTION
++.Nm OpenLISP 
++provides LISP (Locator/ID Separation Protocol) support into the kernel of
++.Fx .
++LISP is a simple IP-over-UDP tunneling solution, implemented typically
++on border routers, which act as Routing LOCators (RLOCs) for the
++end-systems of the local domain. End-systems still send and receive
++packets using IP addresses, which in the LISP terminology are called
++Endpoint IDentifiers (EIDs). 
++Since in a local domain there may be several border routers, EIDs can
++be associated to several RLOCs.  
++The binding between and an EID-Prefix and its RLOCs is called a mapping. 
++.Pp
++The basic idea of LISP is to tunnel packets in the core Internet from
++the RLOC of the source EID to the RLOC of the destination EID.
++During end-to-end packet exchange between two hosts, the source host
++first issues a normal IP packet that is normally routed in the
++source domain to reach one of its border routers. 
++The border router, or Ingress Tunnel Router (ITR), performs the
++EID-to-RLOC lookup in its local cache, or queries the mapping 
++system if no mapping is available in the cache.
++The result of the lookup is the RLOC of the destination host's EID which
++consist in a border router of the detination EID's domain acting as
++Egress Tunnel Router (ETR). 
++The ITR prepends a new LISP header to the packet before forwarding it,
++while the ETR strips this header on reception, before delivering the
++packet to the destination host.  
++The eventual reply of the host follows the same rules. 
++Only the first packet may trigger a query to the mapping system, since
++LISP uses a local caching mechanism to reduce the frequency of lookup
++and latency. 
++In particular, the kernel maintains a Mapping Information Database
++(MID), consisting in the 
++.Va LISP Cache,
++storing short lived mappings in an on-demand fashion, and the 
++.Va LISP Database,
++storing all "local" mappings (i.e., the mappings of the EID-Prefixes
++for which the router is an RLOC), used in selecting the appropriate RLOCs when
++encapsulating/decapsulating packets.
++.Pp
++In 
++.Nm OpenLISP
++the MID consists in a variant of the kernel radix called
++MapTables. In line with the UNIX philosophy and to give the possibility for
++Mapping Distribution Systems running in the user space to  access the
++kernel's MapTables a new type of socket, namely the
++.Va  Mapping Sockets,
++has been defined. Mapping Sockets are based on raw sockets in the new
++AF_MAP domain and are very similar to the well known routing
++sockets. More information about Mapping Sockets can be found in the
++.Xr map 4
++man page. 
++.Pp 
++.Nm OpenLISP
++provides also a small tool to add/remove mappings from the MID from
++the command line. Further information can be found in the 
++.Xr map 8
++man page.
++.Pp 
++.Nm OpenLISP 
++provides as well support for basic statistics concerning LISP related
++network operations. Those statistics can be also accessed from the
++command line through the mapstat tool. Further information can be
++found in the
++.Xr mapstat 1
++man page.
++.Pp 
++.Nm OpenLISP
++provides as well a simple daemon to query existing Mapping Systems in
++order to receive mappings upon miss event in the LISP Cache. 
++Further information can be found in the 
++.Xr mapd 8
++man page.
++.Sh LISP EXAMPLE
++This is a high level example on how LISP works.
++In
++.Xr map 8
++there is an example on how to setup a simple LISP topology using 
++.Nm OpenLISP . 
++To simplify the example, the following scenario is taken as
++reference, where H.A and H.B are the EIDs of respectively host  H.A
++and host H.B, while R.A and R.B are the RLOCs of respectively ITR R.A
++and ETR R.B.  H.A, H.B, R.A, and R.B are also normal IP addresses.
++.Pp
++ +-----------------+                           +-----------------+
++ | Domain A        |                           | Domain B        | 
++ |                 |   +-------------------+   |                 |
++ |       +---------+   |      Internet     |   +---------+       |
++ |       | ITR R.A |---|                   |---| ETR R.B |       |
++ |       +---------+   | Default free Zone |   +---------+       |
++ |                 |   +-------------------+   |                 |
++ |                 |                           |                 |
++ +-----------------+                           +-----------------+
++          |                                             |
++    +-----------+                                  +----------+
++    |  Host H.A |                                  | Host H.B |
++    +-----------+                                  +----------+
++.Pp
++Supposing that H.A wants to set up a TCP connection with H.B, the
++former will start sending a TCP SYN using H.A and H.B as respectively
++source address and destination address.
++The packet will be forwarded in Domain A eventually reaching ITR R.A.
++ITR R.A encapsulates the original packet in a LISP packet using R.A as
++source address and R.B as destination address, thus tunneling the
++packet in the DFZ.
++To perform such an encapsulation, it uses the mappings of the source
++and destination EIDs, as detailed later on.
++When the packet reaches the ETR R.B of the destination Domain B, the
++outer header is stripped and the original packet forwarded in the
++local domain, where it will eventually reach its destination, i.e., H.B.
++The encapsulation/decapsulation operations are performed by the xTRs
++thanks to 
++.Va LISP Database 
++and the 
++.Va LISP Cache. 
++.Pp
++The LISP Database stores the mappings that bind the local EID-Prefixes
++(i.e., inside the local domain) to a set of RLOCs, which belong to
++the xTRs deployed in the domain. For the example the content of both
++databases would be:
++.Pp
++.Bl -tag -width Fl -compact
++.It Cm Database R.A:
++H.A-Prefix -> R.A
++.It Cm Database R.B:
++H.B-Prefix -> R.B
++.El
++.Pp
++Where H.A-Prefix and H.B-Prefix represent the prefixes to which
++respectively H.A and H.B belong.
++The purpose of the LISP Database is two-fold. For outgoing packets, if
++a mapping exists for the source EID it means that the packet has to be
++LISP encapsulated and the source RLOC is selected from the set of
++RLOCs associated to the source EID-Prefix (R.A in the example).
++For incoming packets, if they are destined to a RLOC of the xTR, the
++UDP destination port is set to the LISP reserved number, and a mapping
++exists for the destination EID, then the packets are decapsulated.
++The LISP Database is statically configured on each xTR. 
++.Pp  
++The LISP Cache temporarily stores the mappings for EID-Prefixes that
++are not part of the local domain. 
++This is necessary to correctly encapsulate outgoing packets, in
++particular to select the RLOC to be used as destination address in
++the outer header.
++In the present scenario, in order encapsulate the SYN packet R.A has
++to have the following mapping in its cache:
++.Pp
++.Bl -tag -width Fl -compact
++.It Cm Cache R.A:
++H.B-Prefix -> R.B
++.El
++.Pp
++Vice versa, when H.B replies, R.B needs the following mapping to
++encapsulate the packet:
++.Pp
++.Bl -tag -width Fl -compact
++.It Cm Cache R.B:
++H.A-Prefix -> R.A
++.El
++.Pp
++The LISP Cache is filled on-demand, meaning that the very first packet
++that is destined to a domain for which no mapping is available in the
++cache generates a cache-miss.  
++When a cache-miss occurs, the LISP specification (
++.Va LISP, LISP-MS,
++and
++.Va LISP-ALT
++) request that the mapping is retrieved from a Mapping Distribution
++System.
++In
++.Nm OpenLISP
++a message is sent through all open Mapping Sockets to signal to the
++user space that a miss event occurred in the kernel. The current
++release does not support any mapping system daemon in the user space.
++.Pp 
++When a cache cache-miss occurs, the packet that triggered it cannot be
++encapsulated, since there is no mapping available. 
++The LISP specifications do not explicitly describe what to do with
++the packet.
++As a matter of fact, three options are available: i) silently drop the
++packet; ii) buffer the packet until a mapping is provided; iii)
++piggyback the packet in the Map-Request message. There is no perfect
++solution and every option has pros and cons.
++In 
++.Nm OpenLISP 
++buffering is not supported,
++by default the packet is 
++silently dropped.
++However, 
++.Nm OpenLISP
++can be configured to return the packet that generated the miss to the
++user space in order to allow piggybacking.
++.Sh SYSCTL
++.Nm OpenLISP 
++introduces the following new sysctl controls:
++.Bl -column security.bsd.unprivileged_read_msgbuf integerxxx
++.It Sy "Name	Type	Changeable
++.It "net.lisp.etr	string	yes
++.It "net.lisp.missmsg	string	yes
++.It "net.lisp.hashseed	integer	yes
++.It "net.lisp.srcport	string	yes
++.It "net.lisp.debug	integer	yes
++.It "net.lisp.xpgtimer	string	yes
++.It "net.masock.netisr_maxqlen	integer	yes
++.El
++.Pp 
++These sysctl controls, when changeable, can be set using the 
++.Xr sysctl 8
++command. They can be also configured differently from the default
++values at boot time using the 
++.Xr sysctl.conf 5 
++file. The description of the different controls and their
++possible values are detailed hereafter.
++.Ss net.lisp.etr
++This control determines the behavior of the machine when decapsulating
++LISP packets, i.e., when acting as ETR. In general, a packet is
++decapsulated and forwarded only if an entry for the destination EID
++exists in the LISP Database, otherwise it means that the machine is
++not a RLOC for the EID and the packet is dropped. If the entry in the
++LISP Database exists the packet is decapsulated depending on the value
++of the control. The possible values and the associated policy are:
++.Pp
++.Bl -tag -width Fl -compact
++.It Cm standard 
++This is the default value. The packet is decapsulated and forwarded 
++regardless if it exists an entry for the source EID into the 
++cache. This is in accordance with the LISP's main specifications.
++.It Cm notify
++The packet is decapsulated and forwarded, if there is no entry in the
++Cache for the source EID a MISS message is generated. 
++.It Cm secure
++The packet is decapsulated and forwarded only if an entry exists in the 
++Cache for the source EID, otherwise a MISS message is generated 
++and the packet is dropped.
++.El
++.Ss net.lisp.missmsg
++This control allows determining the type of message that is sent
++through open mapping sockets when a  MISS event occurs.
++.Pp
++.Bl -tag -width Fl -compact
++.It Cm ip
++The miss message returns only the destination EID (IP address)
++that generated the miss. This is the default setting.
++.It Cm header
++The miss message returns the complete IP header of the 
++packet that generated the miss. 
++.It Cm packet
++The miss message returns the entire packet that generated 
++the miss.
++.El
++.Ss net.lisp.hashseed
++This is an integer value used as a seed in the hash function used to
++calculate the source port number of the LISP encapsulated packet. 
++.Ss net.lisp.srcport
++This control allows choosing different algorithms for the selection
++of the source port number in LISP encapsulated packets.
++The possible values and the associated algorithm are:
++.Pp
++.Bl -tag -width Fl -compact
++.It Cm lispdata
++Use LISP reserved port 4341 as source port for all encapsulated packets.
++.It Cm shorthash
++The source port number is obtained from a hash function. For IPv4, the
++source IP address, the destination IP address, and the Protocol Number of the IP
++header of the original packet are used. In case of IPv6, the source
++IP address, the destination IP address, and the Next Header of the IP
++header of the original packet are used.
++.It Cm longhash
++The source port number is obtained from a hash function. The used
++fields are the same like in the shorthash case with in addition the
++first 4 bytes right after the IP header of the original packet. 
++Note that this are usually the bytes that hold the source and
++destination ports for protocols like UDP, TCP, and SCTP, however,
++there is no check if it is actually the case. 
++The algorithm blindly uses the first for 4 bytes right after the IP header.
++.It Cm adaptivehash
++The source port number is obtained from a hash function. The same
++algorithm as longhash is performed if the header after the IP header
++is UDP, TCP, or SCTP, otherwise shorthash is used. In other words, the
++4 bytes right after the IP header are used only if they actually hold
++source and destination port numbers.
++.El 
++.Pp
++The hash function used for the computation of the source port is based
++on the code developed by Bob Jenkins and publicly available at:
++.Va  http://burtleburtle.net/bob/c/lookup3.c .
++.Ss net.lisp.debug
++Enables or disables log messages. A value of 0 disables the log
++messages, any other value enables them. Debug messages are logged
++in the file
++.Va /var/log/debug.log .
++.Ss net.lisp.xpgtimer
++This is the system expunge timer to periodically clean the LISP Cache 
++from unused entries. The time interval is expressed in seconds and can 
++range from the minimum value of 60 seconds (1 minute) up to 86,400 
++seconds (24 hours). When the expunge timer is fired the LISP Cache  
++is searched for all non-static entries that have not been used 
++in the last 
++.Nm net.lisp.xpgtimer 
++seconds. Every such an entry is expunged from the LISP Cache and a
++MAPM_DELETE message, with expired flag set, is broadcasted through all
++open mapping sockets.  
++The values accepted are:
++.Pp
++.Bl -tag -width Fl -compact
++.It Cm 60 - 86400
++Any numeric value in this range is interpreted as the number of seconds 
++to wait before performing a full radix search looking for expired
++entries. 
++.It Cm off
++This turns off the expunge timer. The LISP Cache is never check for
++stale entries.  All mappings have to be explicitly deleted. 
++To turn on again the timer it is sufficient to put any valid numeric
++value. 
++.El 
++.Ss net.mapsock.netisr_maxqlen
++This is the system maximum dispatch queue length for Mapping Sockets.
++.Pp 
++.Nm OpenLISP 
++uses as well the 
++.Xr sysctl 3
++API to export to the user space structure
++containing overall statistics. 
++The name of such structures in the sysctl hierarchy is:
++.Bl -column security.bsd.unprivileged_read_msgbuf integer
++.It Sy "Name	Type	Changeable
++.It "net.lisp.maptables	struct	yes
++.It "net.inet.lisp	struct	yes
++.It "net.inet6.lisp	struct	yes
++.El
++.Ss net.lisp.maptables
++This structure contains the overall hit and miss statistics for the
++LISP Cache and LISP Database and is defined as:
++.Bd -literal 
++/*
++ * Mapping statistics (Mixed IPv4 IPv6).
++ */
++struct	mapstats {
++        uint64_t    miss;    /* failed lookups */
++        uint64_t    hit;     /* successfull lookups */
++};
++
++struct	mappingstats {
++       struct mapstats db;    /* Database Stats */
++       struct mapstats cache; /* Cache Stats */
++};
++.Ed
++.Ss net.inet.lisp
++.Ss net.inet6.lisp
++These two controls return different instantiation of the same data
++structure; one for IPv4 and the other for IPv6. The data structure is
++defined as:
++.Bd -literal
++struct	lispbasicstat {
++				/* input statistics: */
++	uint32_t ipackets;	  /* total input packets */
++	uint32_t ioafpackets;	  /* total input packet with a different 
++				   * AF family in the outer header packet 
++				   */
++	uint32_t ihdrops; 	  /* packet shorter than header */
++        uint32_t ibadencap;	  /* no local mapping present */
++	uint32_t ibadlen;	  /* data length larger than packet */
++        uint32_t ibadsrcvnum;     /* bad source version number */
++        uint32_t ibaddstvnum;     /* bad dst version number */
++
++				/* output statistics: */
++	uint32_t  opackets;	  /* total output packets */
++        uint32_t  ooafpackets;	  /* total input packet with a  
++				   * different AF family in the inner 
++				   * packet 
++				   */
++        uint32_t  omissdrops;	  /* Drops due to cache-miss. */
++        uint32_t  onorlocdrops;	  /* Drops due to No suitable RLOC. */
++        uint32_t  osizedrops;	  /* Drops due to MTU check. */
++        uint32_t  onobufdrops;	  /* Drops due to no buffer space. */
++        uint32_t  odrops;	  /* packet dropped on output */
++};
++.Ed
++.Sh SEE Also
++.Xr map 8 ,
++.Xr map 4 ,
++.Xr mapstat 1 ,
++.Xr mapd 8 .
++.Rs
++.%A "L. Iannone"
++.%A "O. Bonaventure"
++.%T "OpenLISP Implementation Report"
++.%O "draft-iannone-openlisp-implementation-01.txt"
++.Re
++.Rs
++.%A "D. Farinacci"
++.%A "V. Fuller"
++.%A "D. Meyer"
++.%A "D. Lewis"
++.%T "Locator/ID Separation protocol (LISP)"
++.%O "draft-ietf-lisp-15.txt"
++.Re
++.Rs
++.%A "V. Fuller"
++.%A "D. Farinacci"
++.%A "D. Meyer"
++.%A "D. Lewis"
++.%T "LISP Alternative Topology (LISP+ALT)"
++.%O "draft-ietf-lisp-alt-08.txt"
++.Re
++.Rs
++.%A "V. Fuller"
++.%A "D. Farinacci"
++.%T "LISP Map Server"
++.%O "draft-ietf-lisp-ms-11.txt"
++.Re
++.Sh NOTE
++.Pp
++Please send any bug report or code contribution to the authors of
++OpenLISP.
++.Sh AUTHORS
++Luigi Iannone <ggx@openlisp.org>
++.Sh HISTORY
++A
++.Dv OpenLISP has been introduced on 
++.Fx 7.0 . 
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/share/man/man4/Makefile freebsd-10.1.0-LISP/share/man/man4/Makefile
+--- freebsd-10.1.0-RELEASE/share/man/man4/Makefile	2014-12-05 22:04:48.953720068 +0100
++++ freebsd-10.1.0-LISP/share/man/man4/Makefile	2014-12-14 13:47:08.805155058 +0100
+@@ -230,6 +230,7 @@
+ 	lge.4 \
+ 	${_lindev.4} \
+ 	${_linux.4} \
++	lispintro.4 \
+ 	lmc.4 \
+ 	lo.4 \
+ 	lp.4 \
+@@ -248,6 +249,7 @@
+ 	mac_stub.4 \
+ 	mac_test.4 \
+ 	malo.4 \
++	map.4 \
+ 	mcd.4 \
+ 	md.4 \
+ 	mem.4 \
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/share/man/man4/map.4 freebsd-10.1.0-LISP/share/man/man4/map.4
+--- freebsd-10.1.0-RELEASE/share/man/man4/map.4	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/share/man/man4/map.4	2014-12-14 13:47:08.805155058 +0100
+@@ -0,0 +1,280 @@
++.\"/usr/src/share/man/man4/lispintro.4
++.\"
++.\" Copyright (c) 2009-2011 The OpenLISP Project
++.\"
++.\" Redistribution and use in source and binary forms, with or without
++.\" modification, are permitted provided that the following conditions
++.\" are met:
++.\" 1. Redistributions of source code must retain the above copyright
++.\"    notice, this list of conditions and the following disclaimer.
++.\" 2. Redistributions in binary form must reproduce the above copyright
++.\"    notice, this list of conditions and the following disclaimer in the
++.\"    documentation and/or other materials provided with the distribution.
++.\" 3. All advertising materials mentioning features or use of this software
++.\"    must display the following acknowledgement:
++.\"	This product includes software developed by the University of
++.\"	California, Berkeley and its contributors.
++.\" 4. Neither the name of the University nor the names of its contributors
++.\"    may be used to endorse or promote products derived from this software
++.\"    without specific prior written permission.
++.\"
++.\" THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++.\" SUCH DAMAGE.
++.\"
++.\" Contributors:
++.\"		Luigi Iannone <ggx@openlisp.org>
++.\"
++.\" $Id: map.4 181 2011-09-22 15:54:43Z ggx $
++.\"
++.Dd September 27, 2011
++.Dt MAP 4
++.Os
++.Sh NAME
++.Nm map
++.Nd kernel LISP Cache and LISP database socket API
++.Sh SYNOPSIS
++.In sys/types.h
++.In sys/time.h
++.In sys/socket.h
++.In net/if.h
++.In net/maptable.h
++.Ft int
++.Fn socket PF_MAP SOCK_RAW "int family"
++.Sh DESCRIPTION
++.Nm OpenLISP 
++provides LISP support into the kernel of
++.Fx , as described in 
++.Xr lispintro 4 .
++The kernel maintains a Mapping Information Database (MID), which
++is used in selecting the appropriate RLOCs when
++encapsulating/decapsulating packets.
++.Pp
++A user process (or possibly multiple co-operating processes)
++modifies this Mapping Information Database by sending messages over
++a new special kind of socket. Mapping Information Database
++modifications can only be carried out by the super user.
++.Pp
++The operating system may spontaneously emit messages in response
++to external events, such as receipt of a packet for which no mapping
++is available.
++The message types are described in greater detail below.
++.Pp
++When handling a packet, the kernel will attempt to find
++the most specific EID mapping matching the destination and, when
++necessary, source addresses.
++If there is more then one RLOC in the mapping the actual RLOC used
++for encapsulation is chosen following the rules described in the
++.Va LISP 
++specifications.
++Note, however, that for local mappings, i.e., mappings that are part
++of the database, the flag "i" must be set in order for the RLOC to be
++used. The flag is automatically set by 
++.Nm OpenLISP
++and indicates if the RLOC is the address of a local interface.
++This is to avoid emitting packets with a source address that does
++not belong to the machine.
++If no mapping is found for both source and destination EIDs, or if 
++a 
++.Va negative 
++mapping is found for the destination EID, then the packet
++is handed back to normal IP operation, which may lead to sending the 
++packet, if the EID is routable and a route is available in the IP 
++routing table. 
++If a mapping exists for the source EID in the LISP
++Database, but no mapping is available for the destination EID in the
++LISP cache, the packet is silently dropped and a MISS message is sent
++through the mapping sockets. 
++.Pp
++One opens the channel for passing mapping control messages
++by using the socket call.
++There can be more than one mapping socket open per system.
++.Pp
++Messages are formed by a header followed by a
++number of sockaddrs (of variable length depending on the address
++family) and the RLOC metrics data structure.
++.Pp
++Any messages sent to the kernel are returned, and copies are sent
++to all interested listeners.
++The kernel will provide the process ID for the sender, and the sender 
++may use an additional sequence field to distinguish between
++outstanding messages.
++However, message replies may be lost when kernel buffers are exhausted.
++.Pp
++The kernel may reject certain messages, and will indicate this
++by filling in the
++.Ar map_errno
++field.
++The OpenLISP code returns the following error codes if new mappings
++cannot be installed:
++.Bl -tag -width Ds
++.It ENOBUFS: If insufficient resources were available to install a new mapping.
++.It EEXIST: If the EID-Prefix already exists in the mapping table. 
++.It EINVAL: This error code is returned when the mapping that has been 
++provided is not valid. There are several reason that may generate such
++an error, like for instance the case when the list of RLOC provided for
++a mapping contains replicated addresses, or when a mapping that is
++meant to be installed in the LISP Database does not have any RLOC
++(address) belonging to the system. 
++.El
++.Pp
++A process may avoid the expense of reading replies to
++its own messages by issuing a
++.Xr setsockopt 2
++call indicating that the
++.Dv SO_USELOOPBACK
++option at the
++.Dv SOL_SOCKET
++level is to be turned off.
++A process may ignore all messages from the mapping socket
++by doing a
++.Xr shutdown 2
++system call for further input.
++.Pp
++If a mapping is in use when it is deleted,
++the entry will be marked down and removed from the mapping table,
++but the resources associated with it will not
++be reclaimed until all references to it are released.
++User processes can obtain information about the mapping
++entry for a specific EID by using a
++.Dv MAP_GET
++message.
++.Pp
++The set of defined messages are:
++.Bd -literal
++#define MAPM_ADD	   0x01	 /* Add Map */
++#define MAPM_DELETE	   0x02	 /* Delete Map */
++#define MAPM_CHANGE	   0x03	 /* Change Mapping (not yet implemented) */
++#define MAPM_GET 	   0x04	 /* Get matching mapping */
++#define MAPM_MISS          0x05  /* Lookup Failed  (general case) */
++#define MAPM_MISS_EID      0x06  /* Lookup Failed  and EID returned */
++#define MAPM_MISS_HEADER   0x07  /* Lookup Failed and IP header returned */
++#define MAPM_MISS_PACKET   0x08  /* Lookup Failed  and Packet returned */
++#define MAPM_LSBITS        0x09  /* Locator Status Bits Changed */
++#define MAPM_LOCALSTALE    0x0A  /* Local Map Version is stale */
++#define MAPM_REMOTESTALE   0x0B  /* Remote Map Version is stale */
++./"#define MAPM_NONCEMISMATCH 0x0C  /* Received a mismatching nonce */
++.Ed
++.Pp
++A message header consists of the following:
++.Bd -literal
++struct map_msghdr {
++	uint8_t	 map_msglen;	/* to skip over non-understood messages */
++	uint8_t	 map_version;   /* future binary compatibility */
++	uint16_t map_type;	/* message type */
++
++	uint32_t map_flags;	/* flags, incl. kern & mes., e.g. DONE */
++	uint16_t map_addrs;	/* bitmask identifying sockaddrs in msg */
++        uint16_t map_versioning;/* Mapping Version Number */
++
++        int     map_rloc_count;/* Number of rlocs appended to the msg */
++	pid_t	map_pid;	/* identify sender */
++	int	map_seq;	/* for sender to identify action */
++	int	map_errno;	/* why failed */
++};
++.Ed
++.Pp
++The
++.Dq Li "int map_flags"
++is defined as:
++.Bd -literal
++#define	MAPF_DB	        0x001	/* Mapping is part of the Database */
++#define	MAPF_VERSIONING	0x002	/* Mapping uses Versioning */
++#define	MAPF_LOCBITS	0x004	/* Mapping uses LocStatus bits */
++#define MAPF_STATIC	0x008	/* manually added */
++#define	MAPF_UP		0x010	/* Mapping usable */
++#define	MAPF_ALL	0x020	/* Operation concerns both DB and Cache */
++#define MAPF_EXPIRED    0x040   /* Not used for more than XPGTO time */
++#define MAPF_NEGATIVE   0x080   /* Negative Mapping (no RLOCs forward 
++				 * natively)
++				 */
++#define MAPF_DONE	0x100	/* message confirmed */
++.Ed
++.Pp
++Specifiers for which addresses are present in the messages are:
++.Bd -literal
++#define MAPA_EID	0x1	 /* EID sockaddr present */
++#define MAPA_EIDMASK	0x2	 /* netmask sockaddr present */
++#define MAPA_RLOC	0x4	 /* Locator present */
++.Ed
++.Pp
++If MAPA_RLOC is set, it means that there are "int map_rloc_count"
++pairs of "struct sockaddr"  and  "struct rloc_mtx" (in this order).
++.Pp
++The
++.Dq Li "struct rloc_mtx"
++is as defined as:
++.Bd -literal
++struct rloc_mtx {            /* Metrics associated to the RLOC
++			      * Useful for messages mapping sockets 
++			      */
++        u_int8_t priority;   /* Each RLOC has a priority. 
++			      */
++        u_int8_t weight;     /* Each locator has a weight. 
++			      */
++        u_int16_t flags;     /* Flags concerning specific RLOC.
++			      */
++        u_int32_t mtu;       /* MTU for the specific RLOC.
++                              */
++	struct nonce_type tx_nonce; /* Nonce to be used when sending a
++				     * LISP encapsulated packet.
++				     */
++        struct nonce_type rx_nonce; /* Nonce to be used when receiving a
++				     * LISP encapsulated packet.
++				     */
++};
++.Ed
++.Pp
++The
++.Dq Li "u_int16_t flags"
++is as defined as:
++.Bd -literal
++#define RLOCF_UP        0x01    /* RLOC Status bit . */ 
++#define RLOCF_LIF       0x02    /* RLOC is a local interface.
++				 * This is only valid for local mappings.
++				 */
++#define RLOCF_TXNONCE   0x04    /* RLOC Tx Nonce present. */ 
++#define RLOCF_RXNONCE   0x08    /* RLOC Rx Nonce present. */ 
++.Ed
++.Pp
++A good example of how top use mapping sockets can be found in 
++.Va /usr/src/sbin/map/map.c .
++.Pp
++.Sh SEE Also
++.Xr lispintro 4 ,
++.Xr map 8 ,
++.Xr mapstat 1 .
++.Rs
++.%A "L. Iannone"
++.%T "OpenLISP Implementation Report"
++.%O "draft-iannone-openlisp-implementation-01.txt"
++.Re
++.Rs
++.%A "D. Farinacci"
++.%A "V. Fuller"
++.%A "D. Meyer"
++.%A "D. Lewis"
++.%T "Locator/ID Separation protocol (LISP)"
++.%O "draft-ietf-lisp-15.txt"
++.Re
++.Sh NOTE
++.Pp
++The MAPM_CHANGE message is not yet implemented. 
++.Pp
++Please send any bug report or code contribution to the authors of
++OpenLISP.
++.Sh AUTHORS
++Luigi Iannone <ggx@openlisp.org>
++.Sh HISTORY
++The
++.Dv PF_MAP
++protocol family has been introduced with OpenLISP on 
++.Fx 7.0 . 
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/usr.bin/Makefile freebsd-10.1.0-LISP/usr.bin/Makefile
+--- freebsd-10.1.0-RELEASE/usr.bin/Makefile	2014-12-05 22:14:15.084648807 +0100
++++ freebsd-10.1.0-LISP/usr.bin/Makefile	2014-12-14 13:47:08.857181059 +0100
+@@ -97,6 +97,7 @@
+ 	m4 \
+ 	${_makewhatis} \
+ 	${_man} \
++	mapstat \
+ 	mandoc \
+ 	mesg \
+ 	minigzip \
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/usr.bin/mapstat/lisp.c freebsd-10.1.0-LISP/usr.bin/mapstat/lisp.c
+--- freebsd-10.1.0-RELEASE/usr.bin/mapstat/lisp.c	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/usr.bin/mapstat/lisp.c	2014-12-14 13:47:08.865185059 +0100
+@@ -0,0 +1,1151 @@
++/*- /usr/src/usr.bin/mapstat/lisp.c
++ * 
++ * Copyright (c) 2010 - 2011 The OpenLISP Project
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 4. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ * 
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ *
++ *  Contributors: 
++ *               Luigi Iannone <ggx@openlisp.org>
++ *
++ * $Id: lisp.c 182 2011-09-22 16:11:37Z ggx $
++ *
++ */
++
++/*
++ * Copyright (c) 1983, 1988, 1993, 1995
++ *	The Regents of the University of California.  All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 3. All advertising materials mentioning features or use of this software
++ *    must display the following acknowledgement:
++ *	This product includes software developed by the University of
++ *	California, Berkeley and its contributors.
++ * 4. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++/*
++ * Copyright (c) 1983, 1988, 1993
++ *	The Regents of the University of California.  All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 3. All advertising materials mentioning features or use of this software
++ *    must display the following acknowledgement:
++ *	This product includes software developed by the University of
++ *	California, Berkeley and its contributors.
++ * 4. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++
++#include <sys/param.h>
++#include <sys/queue.h>
++#include <sys/domain.h>
++#include <sys/socket.h>
++#include <sys/socketvar.h>
++#include <sys/sysctl.h>
++#include <sys/protosw.h>
++
++#include <net/route.h>
++#include <netinet/in.h>
++#include <netinet/in_systm.h>
++#include <netinet/ip.h>
++#include <netinet/ip_carp.h>
++#ifdef INET6
++#include <netinet/ip6.h>
++#endif /* INET6 */
++#include <netinet/in_pcb.h>
++#include <netinet/ip_icmp.h>
++#include <netinet/icmp_var.h>
++#include <netinet/igmp_var.h>
++#include <netinet/ip_var.h>
++#include <netinet/pim_var.h>
++#include <netinet/tcp.h>
++#include <netinet/tcpip.h>
++#include <netinet/tcp_seq.h>
++#define TCPSTATES
++#include <netinet/tcp_fsm.h>
++#include <netinet/tcp_timer.h>
++#include <netinet/tcp_var.h>
++#include <netinet/tcp_debug.h>
++#include <netinet/udp.h>
++#include <netinet/udp_var.h>
++
++#include <arpa/inet.h>
++#include <err.h>
++#include <errno.h>
++#include <libutil.h>
++#include <netdb.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#include <inttypes.h>
++#include "netstat.h"
++#include "mapstat.h"
++
++
++#include <net/lisp/lisp.h>
++#include <net/lisp/maptables.h>
++
++
++
++
++int	do_mapent = 0;
++struct  mapentry mapentry;
++struct	radix_node_head *map_tables[MAX_TABLES];
++
++static void map_size_cols (int, struct radix_node *);
++static void map_size_cols_tree (struct radix_node *);
++static void map_size_cols_entry (struct mapentry *);
++static const char *fmt_mapsockaddr (struct sockaddr *, struct sockaddr *, int);
++const char * mapname(u_long , u_long );
++const char * mapname6(struct sockaddr_in6 *, struct in6_addr *);
++static void map_tree(struct radix_node *);
++static void map_node (void);
++static void maptreestuff (void);
++static void nprint_mapentry (struct map_msghdr *);
++static void print_mapsockaddr (struct sockaddr *, struct sockaddr *, int, int);
++static void print_mapflags (int, const char *);
++static const char *fmt_mapflags(int);
++static void print_rlocflags (int, const char *);
++static const char *fmt_rlocflags(int);
++static void print_mapentry (struct mapentry *);
++
++/*
++ * Variable & Co. already declared elsewhere
++ */
++extern struct radix_node rnode;
++extern struct radix_mask rmask;
++extern int NewTree;
++
++typedef union {
++	long	dummy;		/* Helps align structure. */
++	struct	sockaddr u_sa;
++	struct	sockaddr_storage u_ss;
++	u_short	u_data[128];
++} ss_u;
++
++char	mapbuf[20];
++
++/*
++ * Column sizes
++ */
++
++static int wid_eid;
++static int wid_mflags;
++static int wid_mvnum;
++static int wid_mrefs;
++static int wid_mrlocsnum;
++static int wid_rlocs;
++static int wid_rlocpriority;
++static int wid_rlocweight;
++static int wid_rlocflags;
++static int wid_rlocmtu;
++static int wid_rlochit;
++static int wid_txnonce;
++static int wid_rxnonce;
++
++#define	WID_EID_DEFAULT(af) \
++	((af) == AF_INET6 ? 20 : 18)
++#define	WID_RLOC_DEFAULT(af) \
++	((af) == AF_INET6 ? (numeric_addr ? 30 : 15) : 15)
++
++/*
++ * Definitions and procedures for kernel memory read.
++ */
++#define kget(p, d) (kread((u_long)(p), (char *)&(d), sizeof (d)))
++
++static ss_u ptr_u;
++
++static struct sockaddr *
++kgetmapsa(struct sockaddr *dst)
++{
++
++	kget(dst, ptr_u.u_sa);
++	if (ptr_u.u_sa.sa_len > sizeof (ptr_u.u_sa))
++		kread((u_long)dst, (char *)ptr_u.u_data, ptr_u.u_sa.sa_len);
++	return (&ptr_u.u_sa);
++
++}  /* kgetmapsa() */
++
++/*
++ * Functions for string formatting
++ */
++
++/*
++ * Definition and Format routine for RLOCs flag
++ */
++
++struct bits {
++	u_long	b_mask;
++	char	b_val;
++} mbits[] = {
++        { MAPF_DB,	        'D' },
++	{ MAPF_VERSIONING,	'V' },
++	{ MAPF_LOCBITS,	        'L' },
++	{ MAPF_STATIC,	        'S' },
++	{ MAPF_UP,	        'U' },
++	{ MAPF_NEGATIVE,        'N' },
++	{ 0 , 0 }
++};
++
++struct bits rlocbits[] = {
++	{ RLOCF_UP,	'U' },
++	{ RLOCF_LIF,	'i' },
++	{ RLOCF_TXNONCE,'t' },
++	{ RLOCF_RXNONCE,'r' },
++	{ 0 , 0 }
++};
++
++
++static const char *
++fmt_rlocflags(int f)
++{
++	static char name[33];
++	char *flags;
++	struct bits *p = rlocbits;
++
++	for (flags = name; p->b_mask; p++)
++		if (p->b_mask & f)
++			*flags++ = p->b_val;
++	*flags = '\0';
++	return (name);
++
++}  /* fmt_rlocflags() */
++
++static void
++print_rlocflags(int f, const char *format)
++{
++	printf(format, fmt_rlocflags(f));
++}  /* print_rlocflags() */
++
++
++static const char *
++fmt_mapflags(int f)
++{
++	static char name[33];
++	char *flags;
++	struct bits *p = mbits;
++
++	for (flags = name; p->b_mask; p++)
++		if (p->b_mask & f)
++			*flags++ = p->b_val;
++	*flags = '\0';
++	return (name);
++
++}  /* fmt_mapflag() */
++
++static void
++print_mapflags(int f, const char *format)
++{
++	printf(format, fmt_mapflags(f));
++}  /* print_mapflags() */
++
++
++/*
++ * Format socket address
++ */
++static const char *
++fmt_mapsockaddr(struct sockaddr *sa, struct sockaddr *mask, int flags)
++{
++	static char workbuf[128];
++	const char *cp;
++
++	switch(sa->sa_family) {
++	case AF_INET:
++	    {
++		struct sockaddr_in *sockin = (struct sockaddr_in *)sa;
++
++		if ((sockin->sin_addr.s_addr == INADDR_ANY) &&
++			mask &&
++			ntohl(((struct sockaddr_in *)mask)->sin_addr.s_addr)
++				==0L)
++				cp = "default" ;
++		else if (mask)
++			cp = mapname(sockin->sin_addr.s_addr,
++				     ntohl(((struct sockaddr_in *)mask)
++					   ->sin_addr.s_addr));
++		else
++			cp = mapname(sockin->sin_addr.s_addr, 0L);
++		break;
++	    }
++
++#ifdef INET6
++	case AF_INET6:
++	    {
++	      
++	        struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)sa;
++		struct in6_addr *in6 = &sa6->sin6_addr;
++
++		/*
++		 * XXX: This is a special workaround for KAME kernels.
++		 * sin6_scope_id field of SA should be set in the future.
++		 */
++		if (IN6_IS_ADDR_LINKLOCAL(in6) ||
++		    IN6_IS_ADDR_MC_LINKLOCAL(in6)) {
++		       /* XXX: override is ok? */
++		        sa6->sin6_scope_id = (u_int32_t)ntohs(*(u_short *)&in6->s6_addr[2]);
++			*(u_short *)&in6->s6_addr[2] = 0;
++		};
++		
++		if (mask) {
++		        cp = mapname6(sa6,
++				      &((struct sockaddr_in6 *)mask)->sin6_addr);
++		} else {
++
++		        cp = mapname6(sa6, NULL);
++		};
++
++		break;
++	    
++	    }
++#endif /*INET6*/
++
++	default:
++	    {
++		u_char *s = (u_char *)sa->sa_data, *slim;
++		char *cq, *cqlim;
++
++		cq = workbuf;
++		slim =  sa->sa_len + (u_char *) sa;
++		cqlim = cq + sizeof(workbuf) - 6;
++		cq += sprintf(cq, "(%d)", sa->sa_family);
++		while (s < slim && cq < cqlim) {
++			cq += sprintf(cq, " %02x", *s++);
++			if (s < slim)
++			    cq += sprintf(cq, "%02x", *s++);
++		}
++		cp = workbuf;
++	    }
++
++	};
++
++	return (cp);
++
++}  /*fmt_mapsockaddr() */
++
++
++static void
++print_mapsockaddr(struct sockaddr *sa, struct sockaddr *mask, int flags, int width)
++{
++	const char *cp;
++
++	cp = fmt_mapsockaddr(sa, mask, flags);
++
++	if (width < 0 )
++		printf("%s ", cp);
++	else {
++		if (numeric_addr)
++			printf("%-*s ", width, cp);
++		else
++			printf("%-*.*s ", width, width, cp);
++	}
++
++}  /* print_mapsockaddr() */
++
++
++/*
++ * Print Mapping tables.
++ */
++void
++mappr(u_long maptree)
++{
++    	struct radix_node_head *rnh, head;
++	
++	printf("Mapping tables:\n");
++
++	if (Aflag == 0 && NewTree)
++		maptreestuff();
++	else {
++		if (maptree == 0) {
++			printf("map_tables: symbol not in namelist\n");
++			return;
++		}
++
++		kget(maptree, map_tables);
++		if ( ((rnh = map_tables[0]) != 0)  
++		     && ((af == AF_INET) || (af == AF_UNSPEC)) ) { /*IPv4 EID*/
++
++		        kget(rnh, head);
++			map_size_cols(AF_INET, head.rnh_treetop);
++			pr_family(AF_INET);
++			do_mapent = 1;
++			pr_maptblhdr(AF_INET);
++			map_tree(head.rnh_treetop);
++
++		};
++		if ( ((rnh = map_tables[1]) != 0) 
++		     && ((af == AF_INET6) || (af == AF_UNSPEC)) ){ /*IPv6 EID*/
++
++		        kget(rnh, head);
++			map_size_cols(AF_INET6, head.rnh_treetop);
++			pr_family(AF_INET6);
++			do_mapent = 1;
++			pr_maptblhdr(AF_INET6);
++			map_tree(head.rnh_treetop);
++		  
++		};
++	}
++}  /* mappr() */
++
++
++
++static void
++domask(char *dst, u_long addr, u_long mask)
++{
++	int b, i;
++
++	if ((mask == 0) || (mask == (u_long) -1)) {
++	  /* XXX - Cast to be fixed 
++	   */
++		*dst = '\0';
++		return;
++	};
++
++	i = 0;
++	for (b = 0; b < 32; b++)
++		if (mask & (1 << b)) {
++			int bb;
++
++			i = b;
++			for (bb = b+1; bb < 32; bb++)
++				if (!(mask & (1 << bb))) {
++					i = -1;	/* noncontig */
++					break;
++				}
++			break;
++		}
++	if (i == -1)
++		sprintf(dst, "&0x%lx", mask);
++	else
++		sprintf(dst, "/%d", 32-i);
++
++}  /* domask() */
++
++
++/*
++ * Return the name of the network whose address is given.
++ * The address is assumed to be that of a net or subnet, not a host.
++ */
++const char *
++mapname(u_long in, u_long mask)
++{
++	char *cp = 0;
++	static char line[MAXHOSTNAMELEN];
++	struct netent *np = NULL;
++	struct hostent *hp = NULL;
++	u_long i;
++
++	i = ntohl(in);
++
++	if ( !numeric_addr && i) {
++
++	  if ((mask == (u_long) -1) || (!mask)) {
++	    /* XXX - cast to be fixed
++	     */
++		        hp = gethostbyaddr((char *)&in, sizeof (struct in_addr),
++					   AF_INET);
++			if (hp) {
++			        cp = hp->h_name;
++				trimdomain(cp, strlen(cp));
++			};
++		} else {
++		        np = getnetbyaddr(i, AF_INET);
++			if (np != NULL) {
++			        cp = np->n_name;
++				trimdomain(cp, strlen(cp));
++			};
++		};
++
++	};
++
++	if (cp != NULL) {
++		strncpy(line, cp, sizeof(line) - 1);
++		line[sizeof(line) - 1] = '\0';
++	} else {
++		inet_ntop(AF_INET, (char *)&in, line, sizeof(line) - 1);
++		domask(line + strlen(line), i, mask);
++	};
++
++	return (line);
++
++} /* mapname() */
++
++
++#ifdef INET6
++const char *
++mapname6(struct sockaddr_in6 *sa6, struct in6_addr *mask)
++{
++	static char line[MAXHOSTNAMELEN];
++	u_char *p = (u_char *)mask;
++	u_char *lim;
++	int masklen = 0, illegal = 0;
++	int failed = 0;
++
++	/* use local variable for safety */
++	struct sockaddr_in6 sa6_local;
++	
++	sa6_local.sin6_family = AF_INET6;
++	sa6_local.sin6_len = sizeof(sa6_local);
++	sa6_local.sin6_addr = sa6->sin6_addr;
++	sa6_local.sin6_scope_id = sa6->sin6_scope_id;
++
++       /* try to get a name if fails retry as numeric 
++	*/
++
++	if (numeric_addr || (failed =getnameinfo((struct sockaddr *)&sa6_local, 
++						 sa6_local.sin6_len, line, 
++						 sizeof(line), NULL, 0, 
++						 NI_NAMEREQD)) ) {
++	
++	        getnameinfo((struct sockaddr *)&sa6_local, sa6_local.sin6_len,
++			    line, sizeof(line), NULL, 0, NI_NUMERICHOST);
++	};
++
++	if (mask) {
++		for (masklen = 0, lim = p + 16; p < lim; p++) {
++			switch (*p) {
++			 case 0xff:
++				 masklen += 8;
++				 break;
++			 case 0xfe:
++				 masklen += 7;
++				 break;
++			 case 0xfc:
++				 masklen += 6;
++				 break;
++			 case 0xf8:
++				 masklen += 5;
++				 break;
++			 case 0xf0:
++				 masklen += 4;
++				 break;
++			 case 0xe0:
++				 masklen += 3;
++				 break;
++			 case 0xc0:
++				 masklen += 2;
++				 break;
++			 case 0x80:
++				 masklen += 1;
++				 break;
++			 case 0x00:
++				 break;
++			 default:
++				 illegal ++;
++				 break;
++			}
++		}
++		if (illegal)
++			fprintf(stderr, "illegal prefixlen\n");
++	};
++
++	if (masklen == 0 && IN6_IS_ADDR_UNSPECIFIED(&sa6->sin6_addr))
++		return("default");
++	
++	if ((numeric_addr || failed) && masklen && (masklen != 128))
++	        sprintf(&line[strlen(line)-1], "/%d", masklen);
++
++	return line;
++
++}  /* mapname6() */
++
++#endif /* INET6 */
++
++
++/*
++ * Set column width
++ */
++static void
++map_size_cols(int ef, struct radix_node *rn)
++{
++	wid_eid = WID_EID_DEFAULT(ef);
++	wid_mflags = 6;
++	wid_mvnum = 8;
++	wid_mrefs = 6;
++	wid_rlocs = WID_RLOC_DEFAULT(AF_INET6);
++	wid_mrlocsnum = 3;
++	wid_rlocpriority = 4;
++	wid_rlocweight = 4;
++	wid_rlocflags = 3;
++	wid_rlocmtu = 5;
++	wid_rlochit = 12;
++	wid_rxnonce = 9;
++	wid_txnonce = 9;
++
++	if (Wflag || numeric_addr) {
++	        map_size_cols_tree(rn);
++	};
++
++}  /* map_size_cols() */
++
++/*
++ * Recursively scan the maptable to..
++ */
++static void
++map_size_cols_tree(struct radix_node *rn)
++{
++again:
++	kget(rn, rnode);
++	if (rnode.rn_bit < 0) {
++		if ((rnode.rn_flags & RNF_ROOT) == 0) {
++		    kget(rn, mapentry);
++		    map_size_cols_entry(&mapentry);
++		}
++		if ((rn = rnode.rn_dupedkey))
++			goto again;
++	} else {
++		rn = rnode.rn_right;
++		map_size_cols_tree(rnode.rn_left);
++		map_size_cols_tree(rn);
++	};
++
++}  /* map_size_cols_tree() */
++
++/*
++ * Check addresses in an entry and keeps trace of the longer.
++ */
++static void
++map_size_cols_entry(struct mapentry *map)
++{
++	const char *bp;
++	struct sockaddr *sa;
++	ss_u addr, mask;
++	int len;
++
++	bzero(&addr, sizeof(addr));
++
++	if ((sa = kgetmapsa(map_key(map))))
++		bcopy(sa, &addr, sa->sa_len);
++
++	bzero(&mask, sizeof(mask));
++	if (map_mask(map) && (sa = kgetmapsa(map_mask(map))))
++		bcopy(sa, &mask, sa->sa_len);
++
++	bp = fmt_mapsockaddr(&addr.u_sa, &mask.u_sa, map->map_flags);
++	len = strlen(bp);
++	wid_eid = MAX(len, wid_eid);
++
++	bp = fmt_mapflags(map->map_flags);
++	len = strlen(bp);
++	wid_mflags = MAX(len, wid_mflags);
++
++}  /* map_size_cols_entry() */
++
++
++
++/*
++ * Print header for mapping table columns.
++ */
++void
++pr_maptblhdr(int af1)
++{
++
++	if (Aflag)
++		printf("%-8.8s ","Address");
++	if (Wflag) {
++	        printf("%-*.*s %-*.*s %*.*s %*.*s %*.*s %-*.*s %*.*s %*.*s %-*.*s %*.*s %*.*s %*.*s %*.*s\n",
++		       wid_eid,	wid_eid,	         "EID",
++		       wid_mflags,	wid_mflags,	 "Flags",
++		       wid_mrefs,	wid_mrefs,	 "Refs",
++		       wid_mvnum,       wid_mvnum,       "Version",
++		       wid_mrlocsnum,	wid_mrlocsnum,	 "#",
++		       wid_rlocs,       wid_rlocs,       "RLOC(s)",
++		       wid_rlocpriority,wid_rlocpriority,"P",
++		       wid_rlocweight,  wid_rlocweight,  "W",
++		       wid_rlocflags,   wid_rlocflags,   "F",
++		       wid_rlocmtu,     wid_rlocmtu,     "MTU",
++		       wid_rlochit,     wid_rlochit,     "Hit",
++		       wid_txnonce,     wid_txnonce,     "TxNonce",
++		       wid_rxnonce,     wid_rxnonce,     "RxNonce");
++	} else {
++		printf("%-*.*s %-*.*s %-*.*s %*.*s %*.*s %-*.*s\n",
++		       wid_eid,	wid_eid,	         "EID",
++		       wid_mflags,	wid_mflags,	 "Flags",
++		       wid_rlocs,       wid_rlocs,       "RLOC(s)",
++		       wid_rlocpriority,wid_rlocpriority,"P",
++		       wid_rlocweight,  wid_rlocweight,  "W",
++		       wid_rlocflags,   wid_rlocflags,   "F");
++	}
++
++}  /* pr_maptblhdr() */
++
++
++/*
++ * Maptbl tree exploring routing
++ */
++static void
++map_tree(struct radix_node *rn)
++{
++
++again:
++	kget(rn, rnode);
++	if (rnode.rn_bit < 0) {
++		if (Aflag)
++			printf("%-8.8lx ", (u_long)rn);
++
++		if (rnode.rn_flags & RNF_ROOT) {
++			if (Aflag)
++				printf("(root node)%s",
++				    rnode.rn_dupedkey ? " =>\n" : "\n");
++		} else if (do_mapent) {
++			kget(rn, mapentry);
++			print_mapentry(&mapentry);
++			if (Aflag)
++				map_node();
++		} else {
++			print_mapsockaddr(kgetmapsa((struct sockaddr *)rnode.rn_key),
++				   NULL, 0, 44);
++			putchar('\n');
++		}
++		if ((rn = rnode.rn_dupedkey))
++			goto again;
++	} else {
++		if (Aflag && do_mapent) {
++			printf("%-8.8lx ", (u_long)rn);
++			map_node();
++		}
++		rn = rnode.rn_right;
++		map_tree(rnode.rn_left);
++		map_tree(rn);
++	}
++
++} /* map_tree() */
++
++
++
++static void
++map_node(void)
++{
++	struct radix_mask *rm = rnode.rn_mklist;
++
++	if (rnode.rn_bit < 0) {
++		if (rnode.rn_mask) {
++			printf("\t  mask ");
++			print_mapsockaddr(kgetmapsa((struct sockaddr *)rnode.rn_mask),
++				   NULL, 0, -1);
++		} else if (rm == 0)
++			return;
++	} else {
++		sprintf(mapbuf, "(%d)", rnode.rn_bit);
++		printf("%6.6s %8.8lx : %8.8lx", mapbuf, (u_long)rnode.rn_left, (u_long)rnode.rn_right);
++	}
++	while (rm) {
++		kget(rm, rmask);
++		sprintf(mapbuf, " %d refs, ", rmask.rm_refs);
++		printf(" mk = %8.8lx {(%d),%s",
++			(u_long)rm, -1 - rmask.rm_bit, rmask.rm_refs ? mapbuf : " ");
++		if (rmask.rm_flags & RNF_NORMAL) {
++			struct radix_node rnode_aux;
++			printf(" <normal>, ");
++			kget(rmask.rm_leaf, rnode_aux);
++			print_mapsockaddr(kgetmapsa((struct sockaddr *)rnode_aux.rn_mask),
++				    NULL, 0, -1);
++		} else
++		    print_mapsockaddr(kgetmapsa((struct sockaddr *)rmask.rm_mask),
++				NULL, 0, -1);
++		putchar('}');
++		if ((rm = rmask.rm_mklist))
++			printf(" ->");
++	}
++	putchar('\n');
++} /* map_node() */
++
++
++static void
++maptreestuff(void)
++{
++	size_t needed;
++	int mib[6];
++	char *buf, *next, *lim;
++	struct map_msghdr *mapmsg;
++
++	mib[0] = CTL_NET;
++	mib[1] = AF_MAP;
++	mib[2] = 0;
++	mib[3] = 0;
++	mib[4] = NET_MAPTBL_DUMP;
++	mib[5] = 0;
++
++	if (sysctl(mib, 6, NULL, &needed, NULL, 0) < 0) {
++		err(1, "sysctl: net.maptables.0.0.dump estimate");
++	}
++
++	if ((buf = malloc(needed)) == 0) {
++		errx(2, "malloc(%lu)", (unsigned long)needed);
++	}
++
++	if (sysctl(mib, 6, buf, &needed, NULL, 0) < 0) {
++		err(1, "sysctl: net.maptables.0.0.dump");
++	}
++	lim  = buf + needed;
++
++	for (next = buf; next < lim; next += mapmsg->map_msglen) {
++		mapmsg = (struct map_msghdr *)next;
++		nprint_mapentry(mapmsg);
++	}
++
++}  /* maptreestuff */
++
++
++
++static void
++nprint_mapentry(struct map_msghdr *mapmsg)
++{
++	struct sockaddr *eid = (struct sockaddr *)(mapmsg + 1);
++	struct sockaddr *eidmask;
++#ifdef notdef
++	static int masks_done, banner_printed;
++#endif
++	int af1 = 0, interesting = MAPF_UP | MAPF_DB | MAPF_STATIC ;
++
++	af1 = eid->sa_family;
++	
++	if (mapmsg->map_addrs == MAPA_EID)
++		print_mapsockaddr(eid, NULL, 0, 36);
++	else {
++	  if (mapmsg->map_addrs | MAPA_EIDMASK) {
++
++	        eidmask = (struct sockaddr *)(SA_SIZE(eid) + (char *)eid);
++		print_mapsockaddr(eid, eidmask, mapmsg->map_flags, 18);
++
++	  } else {
++		print_mapsockaddr(eid, NULL, mapmsg->map_flags, 16);
++	  }
++
++	};
++	print_mapflags(mapmsg->map_flags & interesting, "%-6.6s ");
++
++	putchar('\n');
++}
++
++/* 
++ * Print a complete mapentry 
++ */
++static void
++print_mapentry(struct mapentry *map)
++{
++
++	struct sockaddr *sa;
++	ss_u addr, mask, rloc;
++	static char buffer[128];
++        struct locator_chain lc;  
++	struct locator_chain *onemore = NULL;
++	int i = 0;
++	int priority, weight, mtu, rlochit;
++	uint32_t rxnonce, txnonce;
++	uint16_t flags;
++
++	bzero(&addr, sizeof(addr));
++	if ((sa = kgetmapsa(map_key(map))))
++		bcopy(sa, &addr, sa->sa_len);
++
++	
++	bzero(&mask, sizeof(mask));
++	if (map_mask(map) && (sa = kgetmapsa(map_mask(map))))
++		bcopy(sa, &mask, sa->sa_len);
++
++	print_mapsockaddr(&addr.u_sa, &mask.u_sa, map->map_flags, wid_eid);
++
++	snprintf(buffer, sizeof(buffer), "%%-%d.%ds ", wid_mflags, wid_mflags);
++	print_mapflags(map->map_flags, buffer);
++
++	if (Wflag) {
++		printf("%*ld ", wid_mrefs, map->map_refcnt);
++		if (map->map_flags & MAPF_VERSIONING)
++		        printf("%*u ", wid_mvnum, ntohs(map->vnum));
++		else
++		        printf("%*s ", wid_mvnum," ");
++
++	};
++
++	if (map->rlocs) {
++	        onemore = map->rlocs;
++		kget(map->rlocs,lc);
++		i++;
++	}
++
++	while (onemore) {
++
++		 bzero(&rloc, sizeof(rloc));
++	  
++		 if ((sa = kgetmapsa((struct sockaddr *)(lc.rloc.rloc_addr))))
++		         bcopy(sa, &rloc, sa->sa_len);
++
++		 if ( i>1 ) {
++		         if (Wflag)
++		                 printf(" %-*s   ",(wid_eid + wid_mflags + wid_mrefs + wid_mvnum)," ");
++			 else
++		                 printf("%-*s  ",(wid_eid + wid_mflags)," ");
++		 };
++		 if (Wflag) {
++		         printf("%*ld ", wid_mrlocsnum, (long)i);
++		 };
++
++		 print_mapsockaddr(&rloc.u_sa, NULL, 0, wid_rlocs);
++
++		 priority = lc.rloc.rloc_metrix.rlocmtx.priority;
++		 weight = lc.rloc.rloc_metrix.rlocmtx.weight;
++		 flags = lc.rloc.rloc_metrix.rlocmtx.flags;
++		 mtu = lc.rloc.rloc_metrix.rlocmtx.mtu;	
++		 rlochit = lc.rloc.rloc_metrix.rloc_hit;
++		 rxnonce = (uint32_t)ntohl(lc.rloc.rloc_metrix.rlocmtx.rx_nonce.nvalue) >> 8;
++		 txnonce = (uint32_t)ntohl(lc.rloc.rloc_metrix.rlocmtx.tx_nonce.nvalue) >>8;
++
++		 printf("%*ld %*ld ", wid_rlocpriority, (long) priority,
++			wid_rlocweight,  (long) weight);
++
++		 snprintf(buffer, sizeof(buffer), "%%-%d.%ds ", wid_rlocflags,
++			  wid_rlocflags);
++
++		 print_rlocflags(flags, buffer);
++		 
++		 if (Wflag) {
++		         if (mtu)
++			         printf("%*ld ", wid_rlocmtu, (long) mtu);
++			 else
++			         printf("%*s ", wid_rlocmtu," ");
++
++		         printf("%*ld ", wid_rlochit, (long) rlochit);
++
++		         if (flags & RLOCF_TXNONCE)
++			         printf("%*u ", wid_txnonce, txnonce);
++			 else
++			         printf("%*s ", wid_txnonce," ");
++
++		         if (flags & RLOCF_RXNONCE)
++			         printf("%*u ", wid_rxnonce, rxnonce);
++			 else
++			         printf("%*s ", wid_rxnonce," ");
++
++		 };
++
++		 putchar('\n');
++
++	         if ((onemore = lc.next)) {
++		         kget(lc.next,lc);
++			 i++;
++		 };
++	};
++
++
++	putchar('\n');
++}  /* print_mapentry() */
++
++
++/*
++ * Dump LISP statistics structure.
++ */
++void
++map_stats()
++{
++	struct mappingstats mapstat, zerostat;
++	size_t len = sizeof (struct mappingstats);
++
++	if (zflag)
++		memset(&zerostat, 0, len);
++
++	if (sysctlbyname("net.lisp.maptables", &mapstat, &len,
++	    zflag ? &zerostat : NULL, zflag ? len : 0) < 0) {
++		warn("sysctl: net.lisp.maptables");
++		return;
++	}
++
++	printf("MapTables Statistics:\n");
++	printf("\t %"PRIu64" Database\n", (mapstat.db.hit + mapstat.db.miss));
++	printf("\t\t %"PRIu64" Hit\n",mapstat.db.hit);
++	printf("\t\t %12"PRIu64" Miss\n",mapstat.db.miss);
++	printf("\t %"PRIu64" Cache \n", (mapstat.cache.hit + mapstat.cache.miss));
++	printf("\t\t %"PRIu64" Hit\n",mapstat.cache.hit);
++	printf("\t\t %"PRIu64" Miss\n",mapstat.cache.miss);
++
++} /* map_stats() */
++
++
++void
++lisp_stats(u_long off __unused, const char *name __unused, int af1 __unused, int proto __unused)
++{
++	struct lispbasicstat lispstat, zerostat;
++	size_t len = sizeof (struct lispbasicstat);
++	u_long delivered, sent, received;
++
++	if (zflag)
++		memset(&zerostat, 0, len);
++
++	if (sysctlbyname("net.inet.lisp.stats", &lispstat, &len,
++	    zflag ? &zerostat : NULL, zflag ? len : 0) < 0) {
++		warn("sysctl: net.inet.lisp.stats");
++		return;
++	}
++
++	printf("lisp over ip:\n");
++
++#define	p(f, m) if (lispstat.f || sflag <= 1) \
++    printf(m, lispstat.f, plural(lispstat.f))
++#define	p1a(f, m) if (lispstat.f || sflag <= 1) \
++    printf(m, lispstat.f)
++
++	received = lispstat.ipackets + lispstat.ioafpackets;
++	if (received || sflag <= 1)
++	        printf("\t%lu Datagrams received\n", received);
++	p1a(ioafpackets, "\t\t(%u of which had IPv6 outer header)\n");
++	p1a(ihdrops, "\t\t%u with incomplete header\n");
++	p1a(ibadencap, "\t\t%u with bad encap header\n");
++	p1a(ibadlen, "\t\t%u with bad data length field\n");
++	p1a(ibadsrcvnum, "\t\t%u with bad source version number field\n");
++	p1a(ibaddstvnum, "\t\t%u with bad destination version number field\n");
++	delivered = lispstat.ipackets +
++	            lispstat.ioafpackets -
++		    lispstat.ihdrops -
++		    lispstat.ibadlen -
++	            lispstat.ibadencap;
++	if (delivered || sflag <= 1)
++		printf("\t\t%lu delivered\n", delivered);
++
++	p(opackets, "\t%u datagram%s output\n");
++	p1a(ooafpackets, "\t\t(%u of which with IPv6 inner packet)\n");
++        p1a(omissdrops, "\t\t%u dropped due to cache-miss\n"); 
++        p1a(onorlocdrops, "\t\t%u dropped due to no suitable RLOC\n");  
++        p1a(osizedrops, "\t\t%u dropped due to MTU\n"); 
++        p1a(onobufdrops, "\t\t%u dropped due to no buffer space\n"); 
++	p1a(odrops, "\t\t%u dropped on output\n");
++	sent = lispstat.opackets -
++	       lispstat.odrops;
++	if (sent || sflag <= 1)
++		printf("\t\t%lu sent\n", sent);
++	
++#undef p
++#undef p1a
++} /* lisp_stats() */
++
++void
++lisp6_stats(u_long off __unused, const char *name, int af1 __unused, int proto __unused)
++{
++	struct lispbasicstat lispstat, zerostat;
++	size_t len = sizeof (struct lispbasicstat);
++	u_long delivered, sent, received;
++
++	if (zflag)
++		memset(&zerostat, 0, len);
++
++	if (sysctlbyname("net.inet6.lisp.stats", &lispstat, &len,
++	    zflag ? &zerostat : NULL, zflag ? len : 0) < 0) {
++		warn("sysctl: net.inet6.lisp6.stats");
++		return;
++	}
++
++	printf("lisp over ip6:\n");
++#define	p(f, m) if (lispstat.f || sflag <= 1) \
++    printf(m, lispstat.f, plural(lispstat.f))
++#define	p1a(f, m) if (lispstat.f || sflag <= 1) \
++    printf(m, lispstat.f)
++
++	received = lispstat.ipackets + lispstat.ioafpackets;
++	if (received || sflag <= 1)
++	        printf("\t%lu Datagrams received\n", received);
++	p1a(ioafpackets, "\t\t(%u had IPv4 outer header)\n");
++	p1a(ihdrops, "\t\t%u with incomplete header\n");
++	p1a(ibadencap, "\t\t%u with bad encap header\n");
++	p1a(ibadlen, "\t\t%u with bad data length field\n");
++	p1a(ibadsrcvnum, "\t\t%u with bad source version number field\n");
++	p1a(ibaddstvnum, "\t\t%u with bad destination version number field\n");
++	delivered = lispstat.ipackets +
++	            lispstat.ioafpackets -
++		    lispstat.ihdrops -
++		    lispstat.ibadlen -
++	            lispstat.ibadencap;
++	if (delivered || sflag <= 1)
++		printf("\t\t%lu delivered\n", delivered);
++	p(opackets, "\t%u datagram%s output\n");
++	p1a(ooafpackets, "\t\t(%u of which with IPv4 inner packet)\n");
++        p1a(omissdrops, "\t\t%u dropped due to cache-miss\n"); 
++        p1a(onorlocdrops, "\t\t%u dropped due to no suitable RLOC\n");  
++        p1a(osizedrops, "\t\t%u dropped due to MTU\n"); 
++        p1a(onobufdrops, "\t\t%u dropped due to no buffer space\n"); 
++	p1a(odrops, "\t\t%u dropped on output\n");
++	sent = lispstat.opackets -
++	       lispstat.odrops;
++
++	if (sent || sflag <= 1)
++		printf("\t\t%lu sent\n", sent);
++	
++#undef p
++#undef p1a
++} /* lisp_stats() */
++
++
++void 
++lisp_stats_wrapper(u_long off __unused, const char *name __unused, int af1, int proto __unused)
++{
++
++  if ( (af1 == AF_INET) || (af1 == AF_UNSPEC) )
++    lisp_stats(off, name, af1, proto);
++
++  if ( (af1 == AF_INET6) || (af1 == AF_UNSPEC) )
++    lisp6_stats(off, name, af1, proto);
++
++}  /* lisp_stats_wrapper() */
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/usr.bin/mapstat/main.c freebsd-10.1.0-LISP/usr.bin/mapstat/main.c
+--- freebsd-10.1.0-RELEASE/usr.bin/mapstat/main.c	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/usr.bin/mapstat/main.c	2014-12-14 14:13:00.776812522 +0100
+@@ -0,0 +1,956 @@
++/*- /usr/src/usr.bin/mapstat/main.c
++ * 
++ * Copyright (c) 2010 - 2011 The OpenLISP Project
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 4. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ * 
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ *
++ *  Contributors: 
++ *               Luigi Iannone <ggx@openlisp.org>
++ *
++ * $Id: main.c 182 2011-09-22 16:11:37Z ggx $
++ *
++ */
++
++/*-
++ * Copyright (c) 1983, 1988, 1993
++ *	Regents of the University of California.  All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 4. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++#ifndef lint
++char const copyright[] =
++"@(#) Copyright (c) 1983, 1988, 1993\n\
++	Regents of the University of California.  All rights reserved.\n";
++#endif /* not lint */
++
++#if 0
++#ifndef lint
++static char sccsid[] = "@(#)main.c	8.4 (Berkeley) 3/1/94";
++#endif /* not lint */
++#endif
++
++#include <sys/cdefs.h>
++__FBSDID("$FreeBSD$");
++
++#include <sys/param.h>
++#include <sys/file.h>
++#include <sys/protosw.h>
++#include <sys/socket.h>
++#include <sys/socketvar.h>
++
++#include <netinet/in.h>
++
++#ifdef NETGRAPH
++#include <netgraph/ng_socket.h>
++#endif
++
++#include <ctype.h>
++#include <err.h>
++#include <errno.h>
++#include <kvm.h>
++#include <limits.h>
++#include <netdb.h>
++#include <nlist.h>
++#include <paths.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#include "netstat.h"
++
++#include <net/lisp/lisp.h>
++#include <net/lisp/maptables.h>
++
++static struct nlist nl[] = {
++#define	N_IFNET		0
++	{ .n_name = "_ifnet" },		/* XXXGL: can be deleted */
++#define	N_RTSTAT	1
++	{ .n_name = "_rtstat" },
++#define	N_RTREE		2
++	{ .n_name = "_rt_tables"},
++#define	N_MRTSTAT	3
++	{ .n_name = "_mrtstat" },
++#define	N_MFCHASHTBL	4
++	{ .n_name = "_mfchashtbl" },
++#define	N_VIFTABLE	5
++	{ .n_name = "_viftable" },
++#define	N_IPX		6
++	{ .n_name = "_ipxpcb_list"},
++#define	N_IPXSTAT	7
++	{ .n_name = "_ipxstat"},
++#define	N_SPXSTAT	8
++	{ .n_name = "_spx_istat"},
++#define	N_DDPSTAT	9
++	{ .n_name = "_ddpstat"},
++#define	N_DDPCB		10
++	{ .n_name = "_ddpcb"},
++#define	N_NGSOCKS	11
++	{ .n_name = "_ngsocklist"},
++#define	N_IP6STAT	12
++	{ .n_name = "_ip6stat" },
++#define	N_ICMP6STAT	13
++	{ .n_name = "_icmp6stat" },
++#define	N_IPSECSTAT	14
++	{ .n_name = "_ipsec4stat" },
++#define	N_IPSEC6STAT	15
++	{ .n_name = "_ipsec6stat" },
++#define	N_PIM6STAT	16
++	{ .n_name = "_pim6stat" },
++#define	N_MRT6STAT	17
++	{ .n_name = "_mrt6stat" },
++#define	N_MF6CTABLE	18
++	{ .n_name = "_mf6ctable" },
++#define	N_MIF6TABLE	19
++	{ .n_name = "_mif6table" },
++#define	N_PFKEYSTAT	20
++	{ .n_name = "_pfkeystat" },
++#define	N_RTTRASH	21
++	{ .n_name = "_rttrash" },
++#define	N_CARPSTAT	22
++	{ .n_name = "_carpstats" },
++#define	N_PFSYNCSTAT	23
++	{ .n_name = "_pfsyncstats" },
++#define	N_AHSTAT	24
++	{ .n_name = "_ahstat" },
++#define	N_ESPSTAT	25
++	{ .n_name = "_espstat" },
++#define	N_IPCOMPSTAT	26
++	{ .n_name = "_ipcompstat" },
++#define	N_TCPSTAT	27
++	{ .n_name = "_tcpstat" },
++#define	N_UDPSTAT	28
++	{ .n_name = "_udpstat" },
++#define	N_IPSTAT	29
++	{ .n_name = "_ipstat" },
++#define	N_ICMPSTAT	30
++	{ .n_name = "_icmpstat" },
++#define	N_IGMPSTAT	31
++	{ .n_name = "_igmpstat" },
++#define	N_PIMSTAT	32
++	{ .n_name = "_pimstat" },
++#define	N_TCBINFO	33
++	{ .n_name = "_tcbinfo" },
++#define	N_UDBINFO	34
++	{ .n_name = "_udbinfo" },
++#define	N_DIVCBINFO	35
++	{ .n_name = "_divcbinfo" },
++#define	N_RIPCBINFO	36
++	{ .n_name = "_ripcbinfo" },
++#define	N_UNP_COUNT	37
++	{ .n_name = "_unp_count" },
++#define	N_UNP_GENCNT	38
++	{ .n_name = "_unp_gencnt" },
++#define	N_UNP_DHEAD	39
++	{ .n_name = "_unp_dhead" },
++#define	N_UNP_SHEAD	40
++	{ .n_name = "_unp_shead" },
++#define	N_RIP6STAT	41
++	{ .n_name = "_rip6stat" },
++#define	N_SCTPSTAT	42
++	{ .n_name = "_sctpstat" },
++#define	N_MFCTABLESIZE	43
++	{ .n_name = "_mfctablesize" },
++#define	N_ARPSTAT       44
++	{ .n_name = "_arpstat" },
++#define	N_UNP_SPHEAD	45
++	{ .n_name = "unp_sphead" },
++#define	N_SFSTAT	46
++	{ .n_name = "_sfstat"},
++#ifdef LISP
++#define N_MAPTREE       56
++        { .n_name = "_map_tables" },
++#define N_LISPSTAT      57
++        { .n_name = "_lispstat" },
++#endif /* LISP */
++	{ .n_name = NULL },
++};
++
++struct protox {
++	int	pr_index;		/* index into nlist of cb head */
++	int	pr_sindex;		/* index into nlist of stat block */
++	u_char	pr_wanted;		/* 1 if wanted, 0 otherwise */
++	void	(*pr_cblocks)(u_long, const char *, int, int);
++					/* control blocks printing routine */
++	void	(*pr_stats)(u_long, const char *, int, int);
++					/* statistics printing routine */
++	void	(*pr_istats)(char *);	/* per/if statistics printing routine */
++	const char	*pr_name;		/* well-known name */
++	int	pr_usesysctl;		/* non-zero if we use sysctl, not kvm */
++	int	pr_protocol;
++} protox[] = {
++	{ N_TCBINFO,	N_TCPSTAT,	1,	protopr,
++	  tcp_stats,	NULL,		"tcp",	1,	IPPROTO_TCP },
++	{ N_UDBINFO,	N_UDPSTAT,	1,	protopr,
++	  udp_stats,	NULL,		"udp",	1,	IPPROTO_UDP },
++#ifdef SCTP
++	{ -1,		N_SCTPSTAT,	1,	sctp_protopr,
++	  sctp_stats,	NULL,		"sctp",	1,	IPPROTO_SCTP },
++#endif
++#ifdef SDP
++	{ -1,		-1,		1,	protopr,
++	 NULL,		NULL,		"sdp",	1,	IPPROTO_TCP },
++#endif
++	{ N_DIVCBINFO,	-1,		1,	protopr,
++	  NULL,		NULL,		"divert", 1,	IPPROTO_DIVERT },
++	{ N_RIPCBINFO,	N_IPSTAT,	1,	protopr,
++	  ip_stats,	NULL,		"ip",	1,	IPPROTO_RAW },
++	{ N_RIPCBINFO,	N_ICMPSTAT,	1,	protopr,
++	  icmp_stats,	NULL,		"icmp",	1,	IPPROTO_ICMP },
++	{ N_RIPCBINFO,	N_IGMPSTAT,	1,	protopr,
++	  igmp_stats,	NULL,		"igmp",	1,	IPPROTO_IGMP },
++#ifdef IPSEC
++	{ -1,		N_IPSECSTAT,	1,	NULL,	/* keep as compat */
++	  ipsec_stats,	NULL,		"ipsec", 0,	0},
++	{ -1,		N_AHSTAT,	1,	NULL,
++	  ah_stats,	NULL,		"ah",	0,	0},
++	{ -1,		N_ESPSTAT,	1,	NULL,
++	  esp_stats,	NULL,		"esp",	0,	0},
++	{ -1,		N_IPCOMPSTAT,	1,	NULL,
++	  ipcomp_stats,	NULL,		"ipcomp", 0,	0},
++#endif
++	{ N_RIPCBINFO,	N_PIMSTAT,	1,	protopr,
++	  pim_stats,	NULL,		"pim",	1,	IPPROTO_PIM },
++	{ -1,		N_CARPSTAT,	1,	NULL,
++	  carp_stats,	NULL,		"carp",	1,	0 },
++#ifdef PF
++	{ -1,		N_PFSYNCSTAT,	1,	NULL,
++	  pfsync_stats,	NULL,		"pfsync", 1,	0 },
++#endif
++	{ -1,		N_ARPSTAT,	1,	NULL,
++	  arp_stats,	NULL,		"arp", 1,	0 },
++#ifdef LISP
++        { -1,           N_LISPSTAT,     1,      protopr,
++	lisp_stats_wrapper,   NULL,     "lisp",   1,    0 },
++#endif /* LISP */
++	{ -1,		-1,		0,	NULL,
++	  NULL,		NULL,		NULL,	0,	0 }
++};
++
++#ifdef INET6
++struct protox ip6protox[] = {
++	{ N_TCBINFO,	N_TCPSTAT,	1,	protopr,
++	  tcp_stats,	NULL,		"tcp",	1,	IPPROTO_TCP },
++	{ N_UDBINFO,	N_UDPSTAT,	1,	protopr,
++	  udp_stats,	NULL,		"udp",	1,	IPPROTO_UDP },
++	{ N_RIPCBINFO,	N_IP6STAT,	1,	protopr,
++	  ip6_stats,	ip6_ifstats,	"ip6",	1,	IPPROTO_RAW },
++	{ N_RIPCBINFO,	N_ICMP6STAT,	1,	protopr,
++	  icmp6_stats,	icmp6_ifstats,	"icmp6", 1,	IPPROTO_ICMPV6 },
++#ifdef SDP
++	{ -1,		-1,		1,	protopr,
++	 NULL,		NULL,		"sdp",	1,	IPPROTO_TCP },
++#endif
++#ifdef IPSEC
++	{ -1,		N_IPSEC6STAT,	1,	NULL,
++	  ipsec_stats,	NULL,		"ipsec6", 0,	0 },
++#endif
++#ifdef notyet
++	{ -1,		N_PIM6STAT,	1,	NULL,
++	  pim6_stats,	NULL,		"pim6",	1,	0 },
++#endif
++	{ -1,		N_RIP6STAT,	1,	NULL,
++	  rip6_stats,	NULL,		"rip6",	1,	0 },
++#ifdef LISP
++        { -1,           N_LISPSTAT,     1,      protopr,
++          lisp_stats_wrapper,   NULL,   "lisp", 1,      0 },
++#endif /* LSIP */
++	{ -1,		-1,		0,	NULL,
++	  NULL,		NULL,		NULL,	0,	0 }
++};
++#endif /*INET6*/
++
++#ifdef IPSEC
++struct protox pfkeyprotox[] = {
++	{ -1,		N_PFKEYSTAT,	1,	NULL,
++	  pfkey_stats,	NULL,		"pfkey", 0,	0 },
++	{ -1,		-1,		0,	NULL,
++	  NULL,		NULL,		NULL,	0,	0 }
++};
++#endif
++
++struct protox atalkprotox[] = {
++	{ N_DDPCB,	N_DDPSTAT,	1,	atalkprotopr,
++	  ddp_stats,	NULL,		"ddp",	0,	0 },
++	{ -1,		-1,		0,	NULL,
++	  NULL,		NULL,		NULL,	0,	0 }
++};
++#ifdef NETGRAPH
++struct protox netgraphprotox[] = {
++	{ N_NGSOCKS,	-1,		1,	netgraphprotopr,
++	  NULL,		NULL,		"ctrl",	0,	0 },
++	{ N_NGSOCKS,	-1,		1,	netgraphprotopr,
++	  NULL,		NULL,		"data",	0,	0 },
++	{ -1,		-1,		0,	NULL,
++	  NULL,		NULL,		NULL,	0,	0 }
++};
++#endif
++#ifdef IPX
++struct protox ipxprotox[] = {
++	{ N_IPX,	N_IPXSTAT,	1,	ipxprotopr,
++	  ipx_stats,	NULL,		"ipx",	0,	0 },
++	{ N_IPX,	N_SPXSTAT,	1,	ipxprotopr,
++	  spx_stats,	NULL,		"spx",	0,	0 },
++	{ -1,		-1,		0,	NULL,
++	  NULL,		NULL,		0,	0,	0 }
++};
++#endif
++
++struct protox *protoprotox[] = {
++					 protox,
++#ifdef INET6
++					 ip6protox,
++#endif
++#ifdef IPSEC
++					 pfkeyprotox,
++#endif
++#ifdef IPX
++					 ipxprotox,
++#endif
++					 atalkprotox, NULL };
++
++static void printproto(struct protox *, const char *);
++static void usage(void);
++static struct protox *name2protox(const char *);
++static struct protox *knownname(const char *);
++
++static kvm_t *kvmd;
++static char *nlistf = NULL, *memf = NULL;
++
++int	Aflag;		/* show addresses of protocol control block */
++int	aflag;		/* show all sockets (including servers) */
++int	Bflag;		/* show information about bpf consumers */
++int	bflag;		/* show i/f total bytes in/out */
++int	dflag;		/* show i/f dropped packets */
++int	gflag;		/* show group (multicast) routing or stats */
++int	hflag;		/* show counters in human readable format */
++int	iflag;		/* show interfaces */
++int	Lflag;		/* show size of listen queues */
++int	mflag;		/* show memory stats */
++int	noutputs = 0;	/* how much outputs before we exit */
++int	numeric_addr;	/* show addresses numerically */
++int	numeric_port;	/* show ports numerically */
++static int pflag;	/* show given protocol */
++int	Qflag;		/* show netisr information */
++int	rflag;		/* show routing tables (or routing stats) */
++#ifdef LISP
++int     Xflag;          /* show mapping tables (or mapping stats) */
++#endif /* LISP */
++int	sflag;		/* show protocol statistics */
++int	Wflag;		/* wide display */
++int	Tflag;		/* TCP Information */
++int	xflag;		/* extra information, includes all socket buffer info */
++int	zflag;		/* zero stats */
++
++int	interval;	/* repeat interval for i/f stats */
++
++char	*interface;	/* desired i/f for stats, or NULL for all i/fs */
++int	unit;		/* unit number for above */
++
++int	af;		/* address family */
++int	live;		/* true if we are examining a live system */
++
++int
++main(int argc, char *argv[])
++{
++	struct protox *tp = NULL;  /* for printing cblocks & stats */
++	int ch;
++	int fib = -1;
++	char *endptr;
++
++	af = AF_UNSPEC;
++
++	while ((ch = getopt(argc, argv, "46AaBbdF:f:ghI:iLlM:mN:np:Qq:rSTsuWw:xz"))
++	    != -1)
++		switch(ch) {
++		case '4':
++#ifdef INET
++			af = AF_INET;
++#else
++			errx(1, "IPv4 support is not compiled in");
++#endif
++			break;
++		case '6':
++#ifdef INET6
++			af = AF_INET6;
++#else
++			errx(1, "IPv6 support is not compiled in");
++#endif
++			break;
++		case 'A':
++			Aflag = 1;
++			break;
++		case 'a':
++			aflag = 1;
++			break;
++		case 'B':
++			Bflag = 1;
++			break;
++		case 'b':
++			bflag = 1;
++			break;
++		case 'd':
++			dflag = 1;
++			break;
++		case 'F':
++			fib = strtol(optarg, &endptr, 0);
++			if (*endptr != '\0' ||
++			    (fib == 0 && (errno == EINVAL || errno == ERANGE)))
++				errx(1, "%s: invalid fib", optarg);
++			break;
++		case 'f':
++			if (strcmp(optarg, "ipx") == 0)
++				af = AF_IPX;
++			else if (strcmp(optarg, "inet") == 0)
++				af = AF_INET;
++#ifdef INET6
++			else if (strcmp(optarg, "inet6") == 0)
++				af = AF_INET6;
++#endif
++#ifdef IPSEC
++			else if (strcmp(optarg, "pfkey") == 0)
++				af = PF_KEY;
++#endif
++			else if (strcmp(optarg, "unix") == 0)
++				af = AF_UNIX;
++			else if (strcmp(optarg, "atalk") == 0)
++				af = AF_APPLETALK;
++#ifdef NETGRAPH
++			else if (strcmp(optarg, "ng") == 0
++			    || strcmp(optarg, "netgraph") == 0)
++				af = AF_NETGRAPH;
++#endif
++			else if (strcmp(optarg, "link") == 0)
++				af = AF_LINK;
++			else {
++				errx(1, "%s: unknown address family", optarg);
++			}
++			break;
++		case 'g':
++			gflag = 1;
++			break;
++		case 'h':
++			hflag = 1;
++			break;
++		case 'I': {
++			char *cp;
++
++			iflag = 1;
++			for (cp = interface = optarg; isalpha(*cp); cp++)
++				continue;
++			unit = atoi(cp);
++			break;
++		}
++		case 'i':
++			iflag = 1;
++			break;
++		case 'L':
++			Lflag = 1;
++			break;
++		case 'M':
++			memf = optarg;
++			break;
++		case 'm':
++			mflag = 1;
++			break;
++		case 'N':
++			nlistf = optarg;
++			break;
++		case 'n':
++			numeric_addr = numeric_port = 1;
++			break;
++		case 'p':
++			if ((tp = name2protox(optarg)) == NULL) {
++				errx(1,
++				     "%s: unknown or uninstrumented protocol",
++				     optarg);
++			}
++			pflag = 1;
++			break;
++		case 'Q':
++			Qflag = 1;
++			break;
++		case 'q':
++			noutputs = atoi(optarg);
++			if (noutputs != 0)
++				noutputs++;
++			break;
++		case 'r':
++			rflag = 1;
++			break;
++#ifdef LISP
++                case 'X':
++                        Xflag = 1;
++                        break;
++#endif /* LISP */
++		case 's':
++			++sflag;
++			break;
++		case 'S':
++			numeric_addr = 1;
++			break;
++		case 'u':
++			af = AF_UNIX;
++			break;
++		case 'W':
++		case 'l':
++			Wflag = 1;
++			break;
++		case 'w':
++			interval = atoi(optarg);
++			iflag = 1;
++			break;
++		case 'T':
++			Tflag = 1;
++			break;
++		case 'x':
++			xflag = 1;
++			break;
++		case 'z':
++			zflag = 1;
++			break;
++		case '?':
++		default:
++			usage();
++		}
++	argv += optind;
++	argc -= optind;
++
++#define	BACKWARD_COMPATIBILITY
++#ifdef	BACKWARD_COMPATIBILITY
++	if (*argv) {
++		if (isdigit(**argv)) {
++			interval = atoi(*argv);
++			if (interval <= 0)
++				usage();
++			++argv;
++			iflag = 1;
++		}
++		if (*argv) {
++			nlistf = *argv;
++			if (*++argv)
++				memf = *argv;
++		}
++	}
++#endif
++
++	/*
++	 * Discard setgid privileges if not the running kernel so that bad
++	 * guys can't print interesting stuff from kernel memory.
++	 */
++	live = (nlistf == NULL && memf == NULL);
++	if (!live)
++		setgid(getgid());
++
++	if (xflag && Tflag) 
++		errx(1, "-x and -T are incompatible, pick one.");
++
++	if (Bflag) {
++		if (!live)
++			usage();
++		bpf_stats(interface);
++		exit(0);
++	}
++	if (mflag) {
++		if (!live) {
++			if (kread(0, NULL, 0) == 0)
++				mbpr(kvmd, nl[N_SFSTAT].n_value);
++		} else
++			mbpr(NULL, 0);
++		exit(0);
++	}
++	if (Qflag) {
++		if (!live) {
++			if (kread(0, NULL, 0) == 0)
++				netisr_stats(kvmd);
++		} else
++			netisr_stats(NULL);
++		exit(0);
++	}
++#if 0
++	/*
++	 * Keep file descriptors open to avoid overhead
++	 * of open/close on each call to get* routines.
++	 */
++	sethostent(1);
++	setnetent(1);
++#else
++	/*
++	 * This does not make sense any more with DNS being default over
++	 * the files.  Doing a setXXXXent(1) causes a tcp connection to be
++	 * used for the queries, which is slower.
++	 */
++#endif
++	if (iflag && !sflag) {
++		intpr(interval, NULL, af);
++		exit(0);
++	}
++	if (rflag) {
++		if (sflag) {
++			rt_stats();
++			flowtable_stats();
++		} else
++			routepr(fib, af);
++		exit(0);
++	}
++#ifdef LISP
++	if (Xflag) {
++		if (sflag) {
++			map_stats();
++			exit(0);
++		} else {
++			kread(0, 0, 0);
++			mappr(nl[N_MAPTREE].n_value);
++			exit(0);
++		};
++	};
++#endif /* LISP */
++
++	if (gflag) {
++		if (sflag) {
++			if (af == AF_INET || af == AF_UNSPEC)
++				mrt_stats();
++#ifdef INET6
++			if (af == AF_INET6 || af == AF_UNSPEC)
++				mrt6_stats();
++#endif
++		} else {
++			if (af == AF_INET || af == AF_UNSPEC)
++				mroutepr();
++#ifdef INET6
++			if (af == AF_INET6 || af == AF_UNSPEC)
++				mroute6pr();
++#endif
++		}
++		exit(0);
++	}
++
++	/* Load all necessary kvm symbols */
++	kresolve_list(nl);
++
++	if (tp) {
++		printproto(tp, tp->pr_name);
++		exit(0);
++	}
++	if (af == AF_INET || af == AF_UNSPEC)
++		for (tp = protox; tp->pr_name; tp++)
++			printproto(tp, tp->pr_name);
++#ifdef INET6
++	if (af == AF_INET6 || af == AF_UNSPEC)
++		for (tp = ip6protox; tp->pr_name; tp++)
++			printproto(tp, tp->pr_name);
++#endif /*INET6*/
++#ifdef IPSEC
++	if (af == PF_KEY || af == AF_UNSPEC)
++		for (tp = pfkeyprotox; tp->pr_name; tp++)
++			printproto(tp, tp->pr_name);
++#endif /*IPSEC*/
++#ifdef IPX
++	if (af == AF_IPX || af == AF_UNSPEC) {
++		for (tp = ipxprotox; tp->pr_name; tp++)
++			printproto(tp, tp->pr_name);
++	}
++#endif /* IPX */
++	if (af == AF_APPLETALK || af == AF_UNSPEC)
++		for (tp = atalkprotox; tp->pr_name; tp++)
++			printproto(tp, tp->pr_name);
++#ifdef NETGRAPH
++	if (af == AF_NETGRAPH || af == AF_UNSPEC)
++		for (tp = netgraphprotox; tp->pr_name; tp++)
++			printproto(tp, tp->pr_name);
++#endif /* NETGRAPH */
++	if ((af == AF_UNIX || af == AF_UNSPEC) && !sflag)
++		unixpr(nl[N_UNP_COUNT].n_value, nl[N_UNP_GENCNT].n_value,
++		    nl[N_UNP_DHEAD].n_value, nl[N_UNP_SHEAD].n_value,
++		    nl[N_UNP_SPHEAD].n_value);
++	exit(0);
++}
++
++/*
++ * Print out protocol statistics or control blocks (per sflag).
++ * If the interface was not specifically requested, and the symbol
++ * is not in the namelist, ignore this one.
++ */
++static void
++printproto(struct protox *tp, const char *name)
++{
++	void (*pr)(u_long, const char *, int, int);
++	u_long off;
++
++	if (sflag) {
++		if (iflag) {
++			if (tp->pr_istats)
++				intpr(interval, tp->pr_istats, af);
++			else if (pflag)
++				printf("%s: no per-interface stats routine\n",
++				    tp->pr_name);
++			return;
++		} else {
++			pr = tp->pr_stats;
++			if (!pr) {
++				if (pflag)
++					printf("%s: no stats routine\n",
++					    tp->pr_name);
++				return;
++			}
++			if (tp->pr_usesysctl && live)
++				off = 0;
++			else if (tp->pr_sindex < 0) {
++				if (pflag)
++					printf(
++				    "%s: stats routine doesn't work on cores\n",
++					    tp->pr_name);
++				return;
++			} else
++				off = nl[tp->pr_sindex].n_value;
++		}
++	} else {
++		pr = tp->pr_cblocks;
++		if (!pr) {
++			if (pflag)
++				printf("%s: no PCB routine\n", tp->pr_name);
++			return;
++		}
++		if (tp->pr_usesysctl && live)
++			off = 0;
++		else if (tp->pr_index < 0) {
++			if (pflag)
++				printf(
++				    "%s: PCB routine doesn't work on cores\n",
++				    tp->pr_name);
++			return;
++		} else
++			off = nl[tp->pr_index].n_value;
++	}
++	if (pr != NULL && (off || (live && tp->pr_usesysctl) ||
++	    af != AF_UNSPEC))
++		(*pr)(off, name, af, tp->pr_protocol);
++}
++
++static int
++kvmd_init(void)
++{
++	char errbuf[_POSIX2_LINE_MAX];
++
++	if (kvmd != NULL)
++		return (0);
++
++	kvmd = kvm_openfiles(nlistf, memf, NULL, O_RDONLY, errbuf);
++	setgid(getgid());
++
++	if (kvmd == NULL) {
++		warnx("kvm not available: %s", errbuf);
++		return (-1);
++	}
++
++	return (0);
++}
++
++/*
++ * Resolve symbol list, return 0 on success.
++ */
++int
++kresolve_list(struct nlist *_nl)
++{
++
++	if ((kvmd == NULL) && (kvmd_init() != 0))
++		return (-1);
++
++	if (_nl[0].n_type != 0)
++		return (0);
++
++	if (kvm_nlist(kvmd, _nl) < 0) {
++		if (nlistf)
++			errx(1, "%s: kvm_nlist: %s", nlistf,
++			     kvm_geterr(kvmd));
++		else
++			errx(1, "kvm_nlist: %s", kvm_geterr(kvmd));
++	}
++
++	return (0);
++}
++
++/*
++ * Read kernel memory, return 0 on success.
++ */
++int
++kread(u_long addr, void *buf, size_t size)
++{
++
++	if (kvmd_init() < 0)
++		return (-1);
++
++	if (!buf)
++		return (0);
++	if (kvm_read(kvmd, addr, buf, size) != (ssize_t)size) {
++		warnx("%s", kvm_geterr(kvmd));
++		return (-1);
++	}
++	return (0);
++}
++
++/*
++ * Read single counter(9).
++ */
++uint64_t
++kread_counter(u_long addr)
++{
++
++	if (kvmd_init() < 0)
++		return (-1);
++
++	return (kvm_counter_u64_fetch(kvmd, addr));
++}
++
++/*
++ * Read an array of N counters in kernel memory into array of N uint64_t's.
++ */
++int
++kread_counters(u_long addr, void *buf, size_t size)
++{
++	uint64_t *c = buf;
++
++	if (kvmd_init() < 0)
++		return (-1);
++
++	if (kread(addr, buf, size) < 0)
++		return (-1);
++
++	while (size != 0) {
++		*c = kvm_counter_u64_fetch(kvmd, *c);
++		size -= sizeof(*c);
++		c++;
++	}
++	return (0);
++}
++
++const char *
++plural(uintmax_t n)
++{
++	return (n != 1 ? "s" : "");
++}
++
++const char *
++plurales(uintmax_t n)
++{
++	return (n != 1 ? "es" : "");
++}
++
++const char *
++pluralies(uintmax_t n)
++{
++	return (n != 1 ? "ies" : "y");
++}
++
++/*
++ * Find the protox for the given "well-known" name.
++ */
++static struct protox *
++knownname(const char *name)
++{
++	struct protox **tpp, *tp;
++
++	for (tpp = protoprotox; *tpp; tpp++)
++		for (tp = *tpp; tp->pr_name; tp++)
++			if (strcmp(tp->pr_name, name) == 0)
++				return (tp);
++	return (NULL);
++}
++
++/*
++ * Find the protox corresponding to name.
++ */
++static struct protox *
++name2protox(const char *name)
++{
++	struct protox *tp;
++	char **alias;			/* alias from p->aliases */
++	struct protoent *p;
++
++	/*
++	 * Try to find the name in the list of "well-known" names. If that
++	 * fails, check if name is an alias for an Internet protocol.
++	 */
++	if ((tp = knownname(name)) != NULL)
++		return (tp);
++
++	setprotoent(1);			/* make protocol lookup cheaper */
++	while ((p = getprotoent()) != NULL) {
++		/* assert: name not same as p->name */
++		for (alias = p->p_aliases; *alias; alias++)
++			if (strcmp(name, *alias) == 0) {
++				endprotoent();
++				return (knownname(p->p_name));
++			}
++	}
++	endprotoent();
++	return (NULL);
++}
++
++static void
++usage(void)
++{
++	(void)fprintf(stderr, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n",
++"usage: netstat [-46AaLnSTWx] [-f protocol_family | -p protocol]\n"
++"               [-M core] [-N system]",
++"       netstat -i | -I interface [-46abdhnW] [-f address_family]\n"
++"               [-M core] [-N system]",
++"       netstat -w wait [-I interface] [-46d] [-M core] [-N system] [-q howmany]",
++"       netstat -s [-s] [-46z] [-f protocol_family | -p protocol]\n"
++"               [-M core] [-N system]",
++"       netstat -i | -I interface [-46s] [-f protocol_family | -p protocol]\n"
++"               [-M core] [-N system]",
++"       netstat -m [-M core] [-N system]",
++"       netstat -B [-I interface]",
++"       netstat -r [-46AanW] [-f address_family] [-M core] [-N system]",
++"       netstat -rs [-s] [-M core] [-N system]",
++"       netstat -g [-46W] [-f address_family] [-M core] [-N system]",
++"       netstat -gs [-46s] [-f address_family] [-M core] [-N system]",
++"       netstat -Q");
++	exit(1);
++}
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/usr.bin/mapstat/Makefile freebsd-10.1.0-LISP/usr.bin/mapstat/Makefile
+--- freebsd-10.1.0-RELEASE/usr.bin/mapstat/Makefile	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/usr.bin/mapstat/Makefile	2014-12-14 13:47:08.869187060 +0100
+@@ -0,0 +1,85 @@
++#- /usr/src/usr.bin/mapstat/Makefile
++#
++# Copyright (c) 2010 - 2011 The OpenLISP Project
++#
++# Redistribution and use in source and binary forms, with or without
++#  modification, are permitted provided that the following conditions
++#  are met:
++#  1. Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++#  2. Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#  4. Neither the name of the University nor the names of its contributors
++#     may be used to endorse or promote products derived from this software
++#     without specific prior written permission.
++# 
++#  THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++#  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++#  ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++#  OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++#  HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++#  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++#  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++#  SUCH DAMAGE.
++#
++#  Contributors: 
++#               Luigi Iannone <ggx@openlisp.org>
++#
++#
++
++.include <bsd.own.mk>
++
++PROG=   mapstat
++MAN= 	mapstat.1
++
++SRCS=   if.c inet.c main.c mbuf.c mroute.c route.c \
++        unix.c atalk.c mroute6.c ipsec.c bpf.c pfkey.c \
++	sctp.c lisp.c
++
++WARNS?=	3
++CFLAGS+=-fno-strict-aliasing
++
++CFLAGS+=-DIPSEC
++CFLAGS+=-DSCTP
++
++.if ${MK_INET_SUPPORT} != "no"
++CFLAGS+=-DINET
++.endif
++
++.if ${MK_INET6_SUPPORT} != "no"
++SRCS+=	inet6.c
++CFLAGS+=-DINET6
++.endif
++
++.if ${MK_OFED} != "no"
++CFLAGS+=-DSDP
++.endif
++
++.if ${MK_PF} != "no"
++CFLAGS+=-DPF
++.endif
++
++BINGRP=	kmem
++BINMODE=2555
++DPADD=	${LIBKVM} ${LIBMEMSTAT} ${LIBUTIL}
++LDADD=	-lkvm -lmemstat -lutil
++
++.if ${MK_NETGRAPH_SUPPORT} != "no"
++SRCS+=	netgraph.c
++DPADD+=	${LIBNETGRAPH}
++LDADD+=	-lnetgraph
++CFLAGS+=-DNETGRAPH
++.endif
++
++.if ${MK_IPX_SUPPORT} != "no"
++SRCS+=	ipx.c
++DPADD+=	${LIBIPX}
++LDADD+=	-lipx
++CFLAGS+=-DIPX
++.endif
++
++.include <bsd.prog.mk>
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/usr.bin/mapstat/mapstat.1 freebsd-10.1.0-LISP/usr.bin/mapstat/mapstat.1
+--- freebsd-10.1.0-RELEASE/usr.bin/mapstat/mapstat.1	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/usr.bin/mapstat/mapstat.1	2014-12-14 13:47:08.869187060 +0100
+@@ -0,0 +1,203 @@
++.\"/usr/src/usr.bin/mapstat/mapstat.1
++.\"
++.\" Copyright (c) 2009-2011 The OpenLISP Project
++.\"
++.\" Redistribution and use in source and binary forms, with or without
++.\" modification, are permitted provided that the following conditions
++.\" are met:
++.\" 1. Redistributions of source code must retain the above copyright
++.\"    notice, this list of conditions and the following disclaimer.
++.\" 2. Redistributions in binary form must reproduce the above copyright
++.\"    notice, this list of conditions and the following disclaimer in the
++.\"    documentation and/or other materials provided with the distribution.
++.\" 3. All advertising materials mentioning features or use of this software
++.\"    must display the following acknowledgement:
++.\"	This product includes software developed by the University of
++.\"	California, Berkeley and its contributors.
++.\" 4. Neither the name of the University nor the names of its contributors
++.\"    may be used to endorse or promote products derived from this software
++.\"    without specific prior written permission.
++.\"
++.\" THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++.\" SUCH DAMAGE.
++.\"
++.\" Contributors:
++.\"		Luigi Iannone <ggx@openlisp.org>
++.\"
++.\" $Id: mapstat.1 182 2011-09-22 16:11:37Z ggx $
++.\"
++.\"
++.\"
++.\" Copyright (c) 1983, 1990, 1992, 1993
++.\"	The Regents of the University of California.  All rights reserved.
++.\"
++.\" Redistribution and use in source and binary forms, with or without
++.\" modification, are permitted provided that the following conditions
++.\" are met:
++.\" 1. Redistributions of source code must retain the above copyright
++.\"    notice, this list of conditions and the following disclaimer.
++.\" 2. Redistributions in binary form must reproduce the above copyright
++.\"    notice, this list of conditions and the following disclaimer in the
++.\"    documentation and/or other materials provided with the distribution.
++.\" 3. All advertising materials mentioning features or use of this software
++.\"    must display the following acknowledgement:
++.\"	This product includes software developed by the University of
++.\"	California, Berkeley and its contributors.
++.\" 4. Neither the name of the University nor the names of its contributors
++.\"    may be used to endorse or promote products derived from this software
++.\"    without specific prior written permission.
++.\"
++.\" THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++.\" SUCH DAMAGE.
++.\"
++.\"	@(#)netstat.1	8.8 (Berkeley) 4/18/94
++.\" $FreeBSD: src/usr.bin/netstat/netstat.1,v 1.50.8.3 2005/12/27 23:34:13 csjp Exp $
++.\"
++.Dd September 27, 2011
++.Dt MAPSTAT 1
++.Os
++.Sh NAME
++.Nm mapstat
++.Nd Modification of the 
++.Xr netstat 1
++utility to show LISP-related network status
++.Sh DESCRIPTION
++The
++.Nm
++command symbolically displays the contents of various network-related
++data structures. It is a modification of the existing netstat command,
++thus it basically offers the same identical features and can be used
++in the same identical way. Please refer to 
++.Xr netstat 1
++for more information on the normal use of netstat.
++.Pp
++What
++.Nm 
++introduces is the fact that it can show LISP-related network status.
++Where applies, mapstat accepts also the word "lisp" as protocol.
++Try the following command as an example:
++.Pp
++ mapstat -s -p lisp
++.Pp
++The 
++.Nm 
++adds the new following option:
++.Bl -tag -width flag
++.It Fl X 
++Displays the content of Mapping Information Database (MID), showing
++the available mappings and their status.   
++When used together with the 
++.Nm -s
++option, mapstat shows the number of hit and misses for both the LISP
++Cache and the LISP Database.
++.El
++.Pp
++.Nm 
++shows for each mapping the EID-Prefix, the flags related to the whole mapping,
++the list of RLOCs of the mapping. For each RLOC in the list, its
++address, its Priority, its Weight, and the flags related to the
++specific RLOC (detailed below).
++.Pp
++.Nm
++is able to provide more complete information for each mapping
++present in the MID. This is obtained by using the option
++.Nm -W 
++in conjunction with the 
++.Nm -X
++option.
++In this case 
++.Nm
++provides also the version number associated to the mapping,  the
++number of references to each mapping.
++For each RLOC, it also shows the available MTU (Maximum Transmission
++Unit), if it has been set. 
++.Nm OpenLISP 
++is able to automatically set the MTU of the local RLOCs, i.e., the
++RLOCs that are an interface of the local machine. 
++The number of times that the RLOC has been selected
++for packet encapsulation is shown as well.
++Finally, when present, two nonce values are shown: the TxNonce and the
++RxNonce.
++The first is the Nonce that by configuration is sent with LISP packets
++in the LISP header. The second is the last received Nonce during an
++echo Nonce request.
++.Pp 
++The flags field shows a collection of information about the mapping or
++the RLOC stored as binary choices. The individual flags are the listed
++hereafter.
++.Bl -tag -width 
++.It General Flags 
++.Bl -tag -width  
++.It D   
++The mapping entry is part of the LISP
++Database. If this flag is not present it means that the entry is part
++of the LISP Cache.
++.It V   
++The mapping entry includes a map version number.
++.It L   
++The mapping entry includes Locator Status Bits.
++.It U   
++The mapping entry is "up" and usable.
++.It S   
++The mapping entry is "static", i.e., it has been manually added.
++.It N
++The mapping is a negative mapping, no RLOCs are associated to it.
++.El
++.It RLOC Specific Flags 
++.Bl -tag -width 
++.It U 
++The specific RLOC is "up" and usable.
++.It i
++The specific RLOC is a local interface. This flag can be set only for
++mappings that are part of the LISP Database, i.e., have the flag "D" set.
++.It t
++The specific RLOC has a nonce that is transmitted in the LISP header.
++This flag can never be present in entries that are part of the LISP
++Database.
++.It r
++An echo-nonce request has been received from the RLOC, thus the last
++received nonce is stored. This flag can never be present in entries
++that are part of the LISP Database.
++.El 
++.El
++.Sh SEE ALSO
++.Xr netstat 1 ,
++.Xr lispintro 4 ,
++.Xr map 8 ,
++.Xr map 4 .
++.Sh NOTE
++.Pp
++Please send any bug report or code contribution to the authors of
++OpenLISP.
++.Sh AUTHORS
++Luigi Iannone <ggx@openlisp.org>
++.Sh HISTORY
++The
++.Nm
++utility appeared in
++.Fx 7.0 . 
++.Sh BUGS
++The code is still experimental. Some combinations of the 
++.Fl X 
++option with other native options of 
++.Cm netstat
++may not work or produce unexpected results. Please consider reporting
++to the authors any of such cases. 
+diff '-x=.svn' -ruN freebsd-10.1.0-RELEASE/usr.bin/mapstat/mapstat.h freebsd-10.1.0-LISP/usr.bin/mapstat/mapstat.h
+--- freebsd-10.1.0-RELEASE/usr.bin/mapstat/mapstat.h	1970-01-01 01:00:00.000000000 +0100
++++ freebsd-10.1.0-LISP/usr.bin/mapstat/mapstat.h	2014-12-14 13:47:08.869187060 +0100
+@@ -0,0 +1,49 @@
++/*- /usr/src/usr.bin/mapstat/mapstat.h
++ * 
++ * Copyright (c) 2010 - 2011 The OpenLISP Project
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 4. Neither the name of the University nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ * 
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ *
++ *  Contributors: 
++ *               Luigi Iannone <ggx@openlisp.org>
++ *
++ * $Id: mapstat.h 182 2011-09-22 16:11:37Z ggx $
++ *
++ */
++
++#include <sys/cdefs.h>
++
++extern int	Xflag;	/* show mapping tables (or mapping stats) */
++
++void    lisp_stats_wrapper(u_long , const char *, int, int);
++void    map_stats(void);
++
++void	pr_maptblhdr(int);
++
++void	mappr(u_long);
++
++void    lisp_stats(u_long, const char *, int, int);
++void    lisp6_stats(u_long, const char *, int, int);
++

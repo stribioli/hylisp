@@ -1,0 +1,21 @@
+<db>
+	<mapserver>
+		<ms key="your-key" proxy="no">your-mapserver</ms>
+	</mapserver>
+	
+	<mapresolver>
+		<mr>your-mapresolver</mr>
+	</mapresolver>
+	
+	<eid_prefix prefix="<your-eid>/<prefix-length>" ttl="60" version="0">
+		<rloc>
+			<address family="IPv4">your-rloc</address>
+			<priority>1</priority>
+			<m_priority>0</m_priority>
+			<weight>100</weight>
+			<m_weight>0</m_weight>
+			<local>true</local>
+			<reachable>true</reachable>
+		</rloc>
+	</eid_prefix>
+</db>
